@@ -8,8 +8,17 @@ window.AlienRooms = class {
     this.connected = false;
     this.revision = -1;
     this.queue = Promise.resolve();
-    addEventListener('online', () => { if (this.active) this.poll(); });
-    document.addEventListener('visibilitychange', () => { if (!document.hidden && this.active) this.poll(); });
+    this.generation = 0;
+    const resume = () => {
+      if (!this.active) return;
+      if (this.live && Date.now() - this.lastMessage > 45000) this.socket.close();
+      clearTimeout(this.retryTimer); this.openLive(); this.poll();
+    };
+    addEventListener('online', resume);
+    addEventListener('offline', () => {
+      if (this.active) { this.connection(false); this.socket?.close(); }
+    });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) resume(); });
   }
   storageKey(code) { return `lea-room-session-v1:${code}`; }
   saved(code) {
@@ -34,13 +43,14 @@ window.AlienRooms = class {
     } finally { clearTimeout(timeout); }
   }
   start(data, token, name) {
+    this.stopLive();
     this.callbacks.joining();
     this.code = data.room.code; this.sessionToken = token;
     this.active = true; this.revision = -1;
     localStorage.setItem(this.storageKey(this.code), JSON.stringify({ token, name }));
     localStorage.setItem('lea-room-name', name);
     const url = new URL(location.href); url.hash = `room=${this.code}`; history.replaceState(null, '', url);
-    this.receive(data); this.schedule();
+    this.receive(data); this.schedule(); this.openLive();
     return data;
   }
   async create(name) {
@@ -65,7 +75,7 @@ window.AlienRooms = class {
   }
   receive(data) {
     if (!this.active || data.room.code !== this.code || data.room.revision < this.revision) return;
-    // Polling and action responses can deliver the same state in either order.
+    // Notifications and action responses can deliver the same state in either order.
     // Still accept player presence updates without rendering that state twice.
     if (data.room.revision === this.revision && data.state) data = { room: data.room };
     this.revision = data.room.revision;
@@ -75,26 +85,92 @@ window.AlienRooms = class {
   }
   schedule() {
     clearTimeout(this.timer);
-    if (this.active) this.timer = setTimeout(() => this.poll(), document.hidden ? 5000 : 900);
+    // With a healthy socket this is only a presence heartbeat and recovery check.
+    if (this.active) this.timer = setTimeout(() => this.poll(), this.live ? 25000 : (document.hidden ? 5000 : 900));
+  }
+  stopLive() {
+    this.generation++;
+    clearTimeout(this.timer); clearTimeout(this.retryTimer); clearTimeout(this.connectTimer);
+    clearInterval(this.pingTimer);
+    const socket = this.socket;
+    this.socket = null; this.live = false; this.opening = false;
+    this.polling = false; this.refreshAgain = false; this.retryCount = 0;
+    socket?.close();
+  }
+  retryLive(generation) {
+    if (!this.active || generation !== this.generation) return;
+    clearTimeout(this.retryTimer);
+    const delay = Math.min(30000, 500 * 2 ** Math.min(this.retryCount++, 6)) + Math.random() * 500;
+    this.retryTimer = setTimeout(() => this.openLive(), delay);
+  }
+  async openLive() {
+    if (!this.active || this.socket || this.opening || !navigator.onLine) return;
+    const generation = this.generation, code = this.code;
+    this.opening = true;
+    try {
+      const { ticket } = await this.request(`/rooms/${code}/live-ticket`, this.sessionToken, {});
+      if (!this.active || generation !== this.generation) return;
+      const url = new URL(`${this.api}/rooms/${code}/events`);
+      url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+      const socket = this.socket = new WebSocket(url, ['alien-v1', `ticket.${ticket}`]);
+      const current = () => this.active && generation === this.generation && this.socket === socket;
+      this.connectTimer = setTimeout(() => { if (current()) socket.close(); }, 12000);
+      socket.onmessage = event => {
+        if (!current()) return;
+        this.lastMessage = Date.now();
+        if (event.data === 'pong') return;
+        let message; try { message = JSON.parse(event.data); } catch { return; }
+        if (message.type === 'ready') {
+          clearTimeout(this.connectTimer);
+          this.live = true; this.retryCount = 0;
+          clearInterval(this.pingTimer);
+          this.pingTimer = setInterval(() => {
+            if (!current()) return;
+            if (Date.now() - this.lastMessage > 45000) socket.close();
+            else if (socket.readyState === WebSocket.OPEN) socket.send('ping');
+          }, 20000);
+          // Close the gap between joining/fetching a ticket and subscribing.
+          this.poll();
+        } else if (message.type === 'presence' || (message.type === 'changed' && message.revision > this.revision)) {
+          this.poll();
+        }
+      };
+      socket.onclose = () => {
+        if (!current()) return;
+        clearTimeout(this.connectTimer); clearInterval(this.pingTimer);
+        this.socket = null; this.live = false;
+        this.schedule(); this.retryLive(generation);
+      };
+      socket.onerror = () => { if (current()) socket.close(); };
+    } catch (error) {
+      if (generation === this.generation && error.status !== 401) this.retryLive(generation);
+    } finally { if (generation === this.generation) this.opening = false; }
   }
   async poll() {
-    if (!this.active || this.polling) return;
+    if (!this.active) return;
+    if (this.polling) { this.refreshAgain = true; return; }
     this.polling = true;
-    const code = this.code;
+    const code = this.code, generation = this.generation;
     try {
       const data = await this.request(`/rooms/${code}?since=${this.revision}`, this.sessionToken);
-      if (this.active && this.code === code) this.receive(data);
+      if (this.active && generation === this.generation) this.receive(data);
     } catch (error) {
-      if (this.active && this.code === code) {
+      if (this.active && generation === this.generation) {
         this.connection(false);
         if (error.status === 401) this.callbacks.error(error.message);
       }
-    } finally { this.polling = false; this.schedule(); }
+    } finally {
+      if (generation === this.generation) {
+        this.polling = false;
+        if (this.refreshAgain) { this.refreshAgain = false; this.poll(); }
+        else this.schedule();
+      }
+    }
   }
   action(action) {
-    const code = this.code, body = { opId: crypto.randomUUID(), action };
+    const code = this.code, generation = this.generation, body = { opId: crypto.randomUUID(), action };
     const run = async () => {
-      if (!this.active || this.code !== code) throw new Error('Ya no estás en esa sala.');
+      if (!this.active || generation !== this.generation) throw new Error('Ya no estás en esa sala.');
       if (!this.connected) throw new Error('Sin conexión. Espera a que la sala se reconecte.');
       let data;
       for (let attempt = 0; attempt < 2; attempt++) {
@@ -104,7 +180,7 @@ window.AlienRooms = class {
           if (attempt === 1) { this.connection(false); throw new Error('Conexión interrumpida. La mesa se recuperará al reconectar.'); }
         }
       }
-      if (this.active && this.code === code) { this.receive(data); return data; }
+      if (this.active && generation === this.generation) { this.receive(data); return data; }
     };
     const pending = this.queue.then(run);
     this.queue = pending.catch(() => {});
@@ -112,7 +188,7 @@ window.AlienRooms = class {
   }
   search(id) { return this.request(`/rooms/${this.code}/search`, this.sessionToken, { id }); }
   leave() {
-    clearTimeout(this.timer);
+    this.stopLive();
     const code = this.code, token = this.sessionToken;
     this.active = false; this.connected = false; this.room = null; this.revision = -1;
     this.request(`/rooms/${code}/disconnect`, token, {}).catch(() => {});
