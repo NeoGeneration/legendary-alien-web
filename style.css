@@ -14,6 +14,18 @@
 html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: var(--bg); color: var(--text);
   font: 14px/1.4 system-ui, sans-serif; user-select: none; -webkit-user-select: none; overscroll-behavior: none; }
 body:has(#hand.collapsed) { --hand-h: calc(44px + env(safe-area-inset-bottom)); }
+body.access-locked > :not(#app-access) { display: none !important; }
+#app-access { height: 100dvh; overflow-y: auto; display: grid; place-items: center; padding: 28px 24px;
+  background: radial-gradient(ellipse at 50% 15%, #263b2480, transparent 65%), var(--bg); }
+#access-form { width: 100%; max-width: 340px; }
+.access-eyebrow { font-size: 11px; letter-spacing: .2em; color: #a5b5aa; }
+#access-form h1 { color: var(--accent); letter-spacing: .24em; font-size: 58px; margin: 0 0 28px; line-height: 1; }
+#access-form label { display: block; margin: 24px 0 8px; font-weight: 600; }
+#access-password { width: 100%; min-height: 50px; background: #111816; color: var(--text); border: 1px solid var(--line);
+  border-radius: 7px; padding: 12px; font: inherit; font-size: 18px; user-select: text; -webkit-user-select: text; }
+#access-submit { width: 100%; margin-top: 14px; background: var(--accent); color: var(--bg); min-height: 48px; }
+#access-error { color: #f4c8ab; }
+.access-note { font-size: 12px; color: #a5b5aa; margin-top: 24px; }
 button { min-height: 44px; background: #1b2520; color: var(--text); border: 1px solid var(--line); border-radius: 7px;
   padding: 9px 14px; cursor: pointer; font: inherit; font-weight: 550; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
 button:active { background: #35472c; transform: translateY(1px); }
@@ -166,6 +178,35 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--accent
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 #toolbar #btn-setup, #setup-submit { background: var(--accent); border-color: var(--accent); color: #15200e; }
 #btn-undo, #btn-help { width: 44px; min-width: 44px; padding: 0; font-size: 23px; }
+#btn-room { padding-inline: 10px; }
+#btn-room.connected { border-color: var(--accent); color: var(--accent); }
+#btn-room.disconnected { border-color: #e6a661; color: #e6a661; }
+#room-dialog .modal-box { max-width: 510px; }
+.room-content { overflow-y: auto; padding: 18px; }
+.room-content p:first-child { margin-top: 0; }
+.room-content label { display: block; font-weight: 600; margin: 12px 0 6px; }
+.room-content input { width: 100%; min-height: 46px; border: 1px solid var(--line); border-radius: 7px;
+  background: #1b2520; color: var(--text); font: inherit; font-size: 16px; padding: 10px; user-select: text; -webkit-user-select: text; }
+.room-content button { width: 100%; margin-top: 12px; }
+#room-create, #room-copy { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+.room-join { border-top: 1px solid var(--line); margin-top: 20px; padding-top: 8px; }
+#room-code { text-transform: uppercase; letter-spacing: .12em; }
+#room-link { font-size: 13px; }
+#room-players { list-style: none; margin: 20px 0; padding: 0; }
+#room-players li { padding: 10px 0; border-bottom: 1px solid var(--line); }
+#room-players strong, #room-players small { display: block; }
+#room-players small { color: #acb9b0; margin-top: 3px; }
+#room-error { color: #f4c8ab; margin-bottom: 0; }
+#room-connection { color: var(--accent); }
+.multiplayer-ghost { pointer-events: none; opacity: .8; }
+button:disabled { opacity: .5; cursor: wait; }
+@media (max-width: 400px) {
+  #toolbar { gap: 4px; padding-inline: max(8px, env(safe-area-inset-left)); }
+  #toolbar strong { min-width: 0; font-size: 20px; letter-spacing: .08em; }
+  #toolbar strong span { font-size: 5px; letter-spacing: 0; }
+  #toolbar #btn-setup { font-size: 12px; padding-inline: 8px; }
+  #toolbar #btn-room { padding-inline: 7px; font-size: 12px; }
+}
 #setup .modal-box { max-width: 540px; }
 .setup-fields { overflow-y: auto; padding: 18px; display: flex; flex-direction: column; gap: 10px; }
 .setup-footer { padding: 0 18px 18px; flex-shrink: 0; }
@@ -179,9 +220,3 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--accent
 #setup-error { color: #f4c8ab; }
 #setup-submit { width: 100%; margin-top: 10px; min-height: 48px; }
 @media (hover: none) { #preview { display: none !important; } }
-@media (max-width: 400px) {
-  #toolbar { gap: 6px; }
-  #toolbar strong { font-size: 23px; min-width: 0; }
-  #toolbar strong span { max-width: 120px; font-size: 6px; letter-spacing: .1em; }
-  #toolbar #btn-setup { font-size: 13px; padding-inline: 10px; }
-}

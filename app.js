@@ -25,6 +25,8 @@ let inspectorPointerStarted = false;
 const DOUBLE_TAP_MS = 400;
 let lastStackTap = null;
 let cardZoom = null;
+let online = null;
+let individualState = null, individualUndo = null, pendingRemote = null;
 
 const els = new Map();   // id -> elemento DOM
 function counterIcon(resource) {
@@ -56,6 +58,7 @@ function pushUndo() {
 }
 
 function save() {
+  if (online?.active) return;
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(state)); } catch (e) { /* sin almacenamiento */ }
 }
 
@@ -63,6 +66,150 @@ function status(msg) {
   $('#status').textContent = msg;
   clearTimeout(statusTimer);
   statusTimer = setTimeout(() => { $('#status').textContent = ''; }, 3500);
+}
+
+// ---------- Salas ----------
+function roomError(message) {
+  $('#room-error').textContent = message;
+  $('#room-error').hidden = !message;
+}
+
+function updateRoomUI() {
+  const room = online?.active && online.room;
+  $('#room-entry').hidden = Boolean(room);
+  $('#room-current').hidden = !room;
+  $('#room-title').textContent = room ? `Sala ${room.code}` : 'Jugar con amigos';
+  $('#btn-room').classList.toggle('connected', Boolean(room && online.connected));
+  $('#btn-room').classList.toggle('disconnected', Boolean(room && !online.connected));
+  $('#btn-room').title = room ? `Sala ${room.code} · ${online.connected ? 'Conectada' : 'Reconectando'}` : 'Jugar multijugador';
+  $('#btn-setup').disabled = Boolean(room && !room.host);
+  $('#btn-reset').disabled = Boolean(room && !room.host);
+  $('#btn-undo').disabled = Boolean(room && (!room.canUndo || !online.connected));
+  if (!room) return;
+  $('#room-connection').textContent = online.connected
+    ? `Conectados · Tu zona es Jugador ${room.seat}${room.host ? ' · Eres el anfitrión' : ''}`
+    : 'Sin conexión. Reconectando… Tu partida está guardada.';
+  const link = new URL(location.href); link.hash = `room=${room.code}`;
+  $('#room-link').value = link.href;
+  const list = $('#room-players');
+  const signature = JSON.stringify(room.players);
+  if (list.dataset.players === signature) return;
+  list.dataset.players = signature;
+  list.replaceChildren();
+  for (const person of room.players) {
+    const li = document.createElement('li'), title = document.createElement('strong'), detail = document.createElement('small');
+    title.textContent = `${person.name}${person.id === room.me ? ' (tú)' : ''}`;
+    detail.textContent = `Jugador ${person.seat} · ${person.online ? 'En línea' : 'Desconectado'} · ${person.handCount} cartas en mano`;
+    li.append(title, detail); list.append(li);
+  }
+}
+
+function applyRemote(data) {
+  const previous = new Map(state.objects.map(o => [o.id, o]));
+  const next = data.state;
+  const selected = placement?.kind === 'stack' && previous.get(placement.id);
+  if (selected && !next.objects.some(o => o.id === selected.id && o.v === selected.v)) cancelPlacement();
+  if (placement?.kind === 'hand' && !next.hand.some(c => c.uid === placement.card.uid)) cancelPlacement();
+  const handChanged = JSON.stringify(state.hand) !== JSON.stringify(next.hand);
+  next.objects = next.objects.map(o => previous.get(o.id)?.v === o.v ? previous.get(o.id) : o);
+  if (!handChanged) next.hand = state.hand;
+  state = next;
+  const ids = new Set(next.objects.map(o => o.id));
+  for (const [id, el] of els) if (!ids.has(id)) { el.remove(); els.delete(id); }
+  for (const o of next.objects) if (previous.get(o.id) !== o) renderObj(o);
+  zTop = Math.max(1, ...next.objects.map(o => o.z_ || 0));
+  if (handChanged) renderHand();
+  closeInspector();
+  $('#menu').hidden = true;
+}
+
+function flushRemote() {
+  if (!pendingRemote || drag?.changed || suppressHandClick) return;
+  const data = pendingRemote; pendingRemote = null;
+  if (online?.active) applyRemote(data);
+}
+
+async function onlineAction(action) {
+  try {
+    const result = await online.action(action);
+    if (result) { roomError(''); status(result.message || 'Mesa actualizada'); }
+    return result;
+  } catch (error) { status(error.message); roomError(error.message); return null; }
+}
+
+function initializeRooms() {
+  online = new AlienRooms(window.ALIEN_ROOM_API, {
+    joining() {
+      individualState = clone(state); individualUndo = undoStack;
+      undoStack = []; pendingRemote = null;
+      cancelPlacement(); clearDrag(); closeInspector(); closeModal(); closeCardZoom();
+      $('#setup').hidden = true; $('#help').hidden = true;
+      // Room object versions start at zero; do not reuse local objects with the same IDs.
+      state = { objects: [], hand: [], nextId: 1 };
+      world.replaceChildren(); els.clear();
+    },
+    snapshot(data) {
+      updateRoomUI();
+      if (!data.state) return;
+      pendingRemote = data;
+      flushRemote();
+    },
+    connection() { updateRoomUI(); },
+    error: roomError,
+  });
+  try { $('#room-name').value = localStorage.getItem('lea-room-name') || ''; } catch {}
+  $('#btn-room').onclick = () => {
+    updateRoomUI(); $('#room-dialog').hidden = false;
+    $(online.active ? '#room-copy' : '#room-name').focus();
+  };
+  $('#room-close').onclick = () => { $('#room-dialog').hidden = true; $('#btn-room').focus(); };
+  let connecting = false;
+  async function connect(create) {
+    if (connecting || online.active) return;
+    const name = $('#room-name').value.trim();
+    if (!name) { roomError('Escribe tu nombre para entrar.'); $('#room-name').focus(); return; }
+    connecting = true; roomError('');
+    $('#room-create').disabled = true; $('#room-join').disabled = true;
+    try {
+      await (create ? online.create(name) : online.join($('#room-code').value, name));
+      updateRoomUI(); focusZone('playmat');
+      status(create ? 'Sala creada. Comparte el enlace y prepara la partida.' : 'Ya estás en la sala.');
+    } catch (error) {
+      roomError(error.status || !['TypeError', 'AbortError'].includes(error.name) ? error.message : 'No se pudo conectar al servidor de salas. Vuelve a intentarlo.');
+      $('#room-dialog').hidden = false;
+    } finally {
+      connecting = false; $('#room-create').disabled = false; $('#room-join').disabled = false;
+    }
+  }
+  $('#room-create').onclick = () => connect(true);
+  $('#room-join').onclick = () => connect(false);
+  $('#room-code').onkeydown = e => { if (e.key === 'Enter') connect(false); };
+  $('#room-copy').onclick = async () => {
+    try { await navigator.clipboard.writeText($('#room-link').value); $('#room-copy').textContent = 'Enlace copiado'; }
+    catch { $('#room-link').focus(); $('#room-link').select(); roomError('Selecciona y copia el enlace para compartirlo.'); }
+    setTimeout(() => { $('#room-copy').textContent = 'Copiar enlace'; }, 2500);
+  };
+  $('#room-leave').onclick = async () => {
+    $('#room-leave').disabled = true;
+    await online.queue;
+    online.leave(); pendingRemote = null;
+    cancelPlacement(); clearDrag(); closeInspector(); closeModal(); closeCardZoom();
+    state = individualState; undoStack = individualUndo;
+    individualState = null; individualUndo = null;
+    renderAll(); updateRoomUI(); focusZone('playmat');
+    $('#room-dialog').hidden = true; $('#room-leave').disabled = false;
+    status('Has vuelto a tu partida individual. La sala sigue guardada.');
+  };
+  function openInvitation() {
+    const code = new URLSearchParams(location.hash.slice(1)).get('room');
+    if (!code || online.active) return;
+    $('#room-code').value = code.toUpperCase();
+    const saved = online.saved(code.toUpperCase());
+    if (saved) { $('#room-name').value = saved.name; connect(false); }
+    else { $('#room-dialog').hidden = false; $('#room-name').focus(); }
+  }
+  addEventListener('hashchange', openInvitation);
+  openInvitation();
 }
 
 // ---------- Carga ----------
@@ -291,7 +438,10 @@ function focusZone(zone) {
   if (zone === 'playmat' && mat) fitBounds(mat.x - mat.width / 2, mat.x + mat.width / 2, mat.z - mat.height / 2, mat.z + mat.height / 2);
   else if (zone === 'complex') fitBounds(-17, 5, 4.5, 13);
   else if (zone === 'hq') fitBounds(-22, 11, -8, 0);
-  else if (zone === 'player') fitBounds(-12, 12, -30, -13);
+  else if (zone === 'player') {
+    const bounds = [[-12, 12, -30, -13], [-43, -18, -31, -13], [18, 43, -31, -13], [30, 45, -18, 18], [-47, -33, -14, 23]];
+    fitBounds(...bounds[(online?.room?.seat || 1) - 1]);
+  }
   else if (zone === 'reserve') fitBounds(-52, 47, 35, 66);
   else fitView();
 }
@@ -343,6 +493,9 @@ function addStack(cards, x, z, faceUp, scale, rot) {
 
 function drawToHand(o, n) {
   if (!o || o.type !== 'stack') return;
+  if (online?.active) return onlineAction({ type: 'draw', id: o.id, count: n }).then(result => {
+    if (result) { $('#hand').classList.remove('collapsed'); updateHandToggle(); }
+  });
   pushUndo();
   const taken = o.cards.splice(0, Math.min(n, o.cards.length));
   state.hand.push(...taken);
@@ -356,6 +509,7 @@ function drawToHand(o, n) {
 
 // ---------- Acciones ----------
 function flip(o) {
+  if (online?.active) return onlineAction({ type: 'flip', id: o.id });
   pushUndo();
   o.faceUp = !o.faceUp;
   o.cards.reverse();
@@ -364,6 +518,7 @@ function flip(o) {
 
 function doShuffle(o) {
   if (o.cards.length < 2) return;
+  if (online?.active) return onlineAction({ type: 'shuffle', id: o.id });
   pushUndo();
   shuffle(o.cards);
   renderObj(o); save();
@@ -371,12 +526,14 @@ function doShuffle(o) {
 }
 
 function rotate(o, d) {
+  if (online?.active) return onlineAction({ type: 'rotate', id: o.id, angle: d });
   pushUndo();
   o.rot = (o.rot + d + 360) % 360;
   renderObj(o); save();
 }
 
 function dealRow(o, n) {
+  if (online?.active) return onlineAction({ type: 'deal', id: o.id, count: n });
   pushUndo();
   const { w } = sizeOf(o);
   for (let i = 0; i < n && o.cards.length; i++) {
@@ -386,11 +543,15 @@ function dealRow(o, n) {
   renderAll();
 }
 
-function openSearch(o) {
+function openSearch(o, revealed = null) {
+  if (!o) return;
+  if (online?.active && !revealed) {
+    return online.search(o.id).then(result => { if (online.active) openSearch(byId(o.id), result.cards); }).catch(error => status(error.message));
+  }
   $('#modal-title').textContent = `${o.name || 'Mazo'} · ${o.cards.length} cartas · Toca para robar`;
   const body = $('#modal-body');
   body.innerHTML = '';
-  o.cards.forEach((card, i) => {
+  (revealed || o.cards).forEach((card, i) => {
     const img = document.createElement('img');
     img.src = card.face;
     img.alt = card.name || `Carta ${i + 1}`;
@@ -398,6 +559,12 @@ function openSearch(o) {
     img.setAttribute('role', 'button');
     img.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); img.click(); } };
     img.onclick = e => {
+      if (online?.active) {
+        onlineAction({ type: 'searchTake', id: o.id, uid: card.uid, toTable: e.shiftKey }).then(result => {
+          if (result && byId(o.id)) openSearch(byId(o.id));
+        });
+        return;
+      }
       pushUndo();
       const [c] = o.cards.splice(i, 1);
       if (e.shiftKey) addStack([c], o.x + sizeOf(o).w + 0.3, o.z, true, o.scale, o.rot);
@@ -413,6 +580,7 @@ function openSearch(o) {
 function closeModal() { $('#modal').hidden = true; }
 
 function spawnFromBag(o) {
+  if (online?.active) return onlineAction({ type: 'spawn', id: o.id });
   pushUndo();
   const t = { type: 'token', id: state.nextId++, x: o.x + 2.5 + Math.random(), z: o.z + Math.random(),
     rot: 0, scale: 1, name: o.name, color: o.color };
@@ -423,10 +591,12 @@ function spawnFromBag(o) {
 
 function deleteObj(o) {
   if (o.type === 'player-zone') return;
+  if (online?.active) return onlineAction({ type: 'delete', id: o.id });
   pushUndo(); removeObj(o.id); save();
 }
 
 function undo() {
+  if (online?.active) return onlineAction({ type: 'undo', revision: online.revision });
   if (!undoStack.length) return;
   cancelPlacement();
   closeInspector();
@@ -485,7 +655,10 @@ function closeCardZoom() {
   if (target?.isConnected) target.focus({ preventScroll: true });
 }
 
-function changeCounter(o, amount) { pushUndo(); o.value += amount; renderObj(o); save(); }
+function changeCounter(o, amount) {
+  if (online?.active) return onlineAction({ type: 'counter', id: o.id, amount });
+  pushUndo(); o.value += amount; renderObj(o); save();
+}
 
 function inspect(title, src, actions) {
   inspectorPointerStarted = false;
@@ -509,6 +682,7 @@ function inspect(title, src, actions) {
 }
 
 function inspectObject(o) {
+  if (!o) return;
   if (o.type === 'stack') {
     const count = o.cards.length;
     inspect(`${o.name || (count > 1 ? 'Mazo' : 'Carta')} · ${count} ${count === 1 ? 'carta' : 'cartas'}`,
@@ -516,7 +690,7 @@ function inspectObject(o) {
         ['Ampliar', () => openCardZoom(o.cards[0], o.faceUp, o.rot - 180)],
         ['Robar 1', () => drawToHand(o, 1)],
         ...(count > 1 ? [['Robar 6', () => drawToHand(o, 6)]] : []),
-        ['Voltear', () => { flip(o); inspectObject(o); }],
+        ['Voltear', async () => { await flip(o); inspectObject(byId(o.id)); }],
         ['Colocar en mesa', () => beginPlacement({ kind: 'stack', id: o.id, one: count > 1 })],
         ...(count > 1 ? [
           ['Mover mazo', () => beginPlacement({ kind: 'stack', id: o.id })],
@@ -531,8 +705,8 @@ function inspectObject(o) {
     inspect(o.name, null, [['Mover', () => beginPlacement({ kind: 'stack', id: o.id })], ['Eliminar ficha', () => deleteObj(o)]]);
   } else if (o.type === 'counter') {
     inspect(`${o.name || 'Contador'} · ${o.value}`, null, [
-      ['Sumar 1', () => { changeCounter(o, 1); inspectObject(o); }],
-      ['Restar 1', () => { changeCounter(o, -1); inspectObject(o); }]
+      ['Sumar 1', async () => { await changeCounter(o, 1); inspectObject(byId(o.id)); }],
+      ['Restar 1', async () => { await changeCounter(o, -1); inspectObject(byId(o.id)); }]
     ]);
     $('#inspector').dataset.resource = o.resource || 'strikes';
     $('#inspector-title').prepend(counterIcon(o.resource));
@@ -598,6 +772,14 @@ function mergeStack(o) {
 
 function placeAt(p) {
   if (!placement) return;
+  if (online?.active) {
+    const selected = placement;
+    const object = selected.kind === 'stack' && byId(selected.id);
+    cancelPlacement();
+    if (selected.kind === 'hand') return onlineAction({ type: 'handPlace', uid: selected.card.uid, position: p });
+    if (object) return onlineAction({ type: 'move', id: object.id, version: object.v || 0, one: Boolean(selected.one), position: p });
+    return;
+  }
   let o;
   if (placement.kind === 'hand') {
     const i = state.hand.indexOf(placement.card);
@@ -702,15 +884,17 @@ function zoomAt(mx, my, nz) {
 function clearDrag() {
   viewport.classList.remove('panning');
   document.querySelectorAll('.drop').forEach(el => el.classList.remove('drop'));
+  drag?.ghost?.remove();
   drag = null;
 }
 
 function cancelDrag() {
-  if (drag?.changed) {
+  if (drag?.changed && !online?.active) {
     state = undoStack.pop();
     renderAll();
   }
   clearDrag();
+  flushRemote();
 }
 
 viewport.addEventListener('pointerdown', e => {
@@ -780,6 +964,26 @@ viewport.addEventListener('pointermove', e => {
     view.y = drag.vy + e.clientY - drag.sy;
     applyView();
   } else {
+    if (online?.active) {
+      if (!drag.changed) {
+        const source = byId(drag.id);
+        if (!source) { clearDrag(); return; }
+        cancelPlacement();
+        drag.changed = true;
+        drag.o = clone(source);
+        drag.ghost = els.get(source.id).cloneNode(true);
+        drag.ghost.removeAttribute('data-id');
+        drag.ghost.classList.add('multiplayer-ghost');
+        drag.ghost.style.zIndex = '100000';
+        if (drag.split && source.type === 'stack') drag.ghost.querySelector('.count')?.remove();
+        world.appendChild(drag.ghost);
+      }
+      const p = screenToWorld(e.clientX, e.clientY), size = sizeOf(drag.o);
+      drag.o.x = p.x + drag.dx; drag.o.z = p.z + drag.dz;
+      drag.ghost.style.left = (drag.o.x - size.w / 2) * UNIT + 'px';
+      drag.ghost.style.top = (-drag.o.z - size.h / 2) * UNIT + 'px';
+      return;
+    }
     if (!drag.changed) {
       cancelPlacement();
       pushUndo();
@@ -833,6 +1037,12 @@ viewport.addEventListener('pointerup', e => {
   }
   if (completed.kind === 'obj') {
     const o = completed.o;
+    if (online?.active) {
+      flushRemote();
+      onlineAction({ type: 'move', id: completed.id, version: o.v || 0, one: completed.split,
+        position: { x: o.x, z: o.z }, toHand: o.type === 'stack' && e.clientY > $('#hand').getBoundingClientRect().top });
+      return;
+    }
     if (o.type === 'stack' && e.clientY > $('#hand').getBoundingClientRect().top) {
       state.hand.push(...(o.faceUp ? o.cards : o.cards.slice().reverse()));
       removeObj(o.id);
@@ -883,7 +1093,7 @@ function startHandDrag(e, i) {
     removeEventListener('pointerup', up);
     removeEventListener('pointercancel', cleanup);
     ghost?.remove();
-    setTimeout(() => { suppressHandClick = false; }, 0);
+    setTimeout(() => { suppressHandClick = false; flushRemote(); }, 0);
   };
   const up = ev => {
     if (ghost) {
@@ -912,8 +1122,8 @@ addEventListener('keydown', e => {
     return;
   }
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); undo(); return; }
-  if (e.key === 'Escape') { closeModal(); closeInspector(); cancelPlacement(); $('#help').hidden = true; $('#setup').hidden = true; $('#menu').hidden = true; return; }
-  if (!$('#inspector').hidden || !$('#modal').hidden || !$('#help').hidden || !$('#setup').hidden) return;
+  if (e.key === 'Escape') { closeModal(); closeInspector(); cancelPlacement(); $('#help').hidden = true; $('#setup').hidden = true; $('#room-dialog').hidden = true; $('#menu').hidden = true; return; }
+  if (!$('#inspector').hidden || !$('#modal').hidden || !$('#help').hidden || !$('#setup').hidden || !$('#room-dialog').hidden) return;
   if (e.target.closest?.('input, textarea, select, [contenteditable="true"]')) return;
   if (space) {
     if (e.repeat || e.ctrlKey || e.metaKey || e.altKey || drag || pinch || suppressHandClick) return;
@@ -1003,6 +1213,7 @@ document.querySelectorAll('.overlay').forEach(overlay => {
 });
 $('#btn-reset').onclick = () => {
   if (!confirm('¿Reiniciar la mesa al estado original del mod?')) return;
+  if (online?.active) { onlineAction({ type: 'reset' }); return; }
   pushUndo();
   cancelPlacement();
   closeInspector();
@@ -1043,8 +1254,15 @@ $('#btn-setup').onclick = () => {
 };
 $('#setup-close').onclick = () => { $('#setup').hidden = true; };
 $('#setup-scenario').onchange = $('#setup-players').onchange = updateSetupSummary;
-$('#setup-form').onsubmit = e => {
+$('#setup-form').onsubmit = async e => {
   e.preventDefault();
+  if (online?.active) {
+    const result = await onlineAction({ type: 'setup', options: {
+      scenario: $('#setup-scenario').value, players: Number($('#setup-players').value), expansionDrones: $('#setup-drones').checked
+    } });
+    if (result) { $('#setup').hidden = true; focusZone('playmat'); }
+    return;
+  }
   try {
     const prepared = AlienSetup.create(initial, {
       scenario: $('#setup-scenario').value, players: Number($('#setup-players').value), expansionDrones: $('#setup-drones').checked
@@ -1076,6 +1294,6 @@ new ResizeObserver(() => {
   viewportSize = { w: viewport.clientWidth, h: viewport.clientHeight };
 }).observe(viewport);
 
-load().catch(error => {
+window.AlienAccess.ready.then(load).then(initializeRooms).catch(error => {
   $('#status').textContent = `${error.message} Recarga la página para volver a intentarlo.`;
 });
