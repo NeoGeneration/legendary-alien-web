@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b0f0e">
+<title>Legendary Encounters: Alien — Mesa</title>
+<link rel="stylesheet" href="style.css?v=8">
+</head>
+<body>
+<header id="toolbar">
+  <strong><span>LEGENDARY ENCOUNTERS</span>ALIEN</strong>
+  <button id="btn-setup">Preparar</button>
+  <button id="btn-undo" title="Deshacer (Ctrl+Z)" aria-label="Deshacer">↶</button>
+  <button id="btn-help" aria-label="Ayuda y opciones">?</button>
+</header>
+<nav id="zones" aria-label="Zonas de la mesa">
+  <button data-zone="playmat" aria-pressed="true">Tapete</button>
+  <button data-zone="complex" aria-pressed="false">Complejo</button>
+  <button data-zone="hq" aria-pressed="false">HQ</button>
+  <button data-zone="player" aria-pressed="false">Jugador</button>
+  <button data-zone="reserve" aria-pressed="false">Reserva</button>
+  <button id="btn-fit" data-zone="all" aria-pressed="false">Toda la mesa</button>
+</nav>
+<main id="viewport" aria-label="Mesa de juego"><div id="world"></div></main>
+<div id="zoom-controls" role="group" aria-label="Zoom">
+  <button id="zoom-in" aria-label="Acercar">+</button>
+  <button id="zoom-out" aria-label="Alejar">−</button>
+</div>
+<div id="table-hint">1 toque: carta · 2 toques: mazo · Pellizca para acercar</div>
+<div id="placement" hidden><span id="placement-label" role="status">1 carta seleccionada. Toca el destino.</span><div class="placement-buttons"><button id="placement-preview" hidden>Ampliar</button><button id="placement-actions" hidden>Acciones</button><button id="cancel-placement">Cancelar</button></div></div>
+<div id="status" role="status" aria-live="polite"></div>
+<section id="hand" aria-label="Tu mano">
+  <button id="hand-toggle" aria-expanded="true" aria-controls="hand-cards"><span>Tu mano <b id="hand-count">0</b></span><span id="hand-toggle-label">Ocultar ↓</span></button>
+  <div id="hand-cards"></div>
+</section>
+<div id="preview" hidden><img alt=""></div>
+<div id="menu" hidden></div>
+<div id="card-zoom" class="overlay" hidden role="dialog" aria-modal="true" aria-labelledby="card-zoom-title" tabindex="-1">
+  <span id="card-zoom-title" hidden>Carta ampliada</span>
+  <button id="card-zoom-close" aria-label="Cerrar carta ampliada" title="Cerrar">×</button>
+  <div id="card-zoom-body"><img id="card-zoom-image" alt="Carta ampliada" draggable="false"></div>
+</div>
+<div id="setup" class="overlay" hidden role="dialog" aria-modal="true" aria-labelledby="setup-title">
+  <form id="setup-form" class="modal-box">
+    <div class="modal-head"><span id="setup-title">Preparar partida</span><button type="button" id="setup-close">Cerrar</button></div>
+    <div class="setup-fields">
+      <label for="setup-scenario">Escenario</label>
+      <select id="setup-scenario" name="scenario"></select>
+      <label for="setup-players">Jugadores</label>
+      <select id="setup-players" name="players">
+        <option value="1">1 jugador</option><option value="2" selected>2 jugadores</option>
+        <option value="3">3 jugadores</option><option value="4">4 jugadores</option><option value="5">5 jugadores</option>
+      </select>
+      <label class="setup-check"><input id="setup-drones" type="checkbox" checked> Incluir drones de la expansión</label>
+      <p id="setup-summary"></p>
+      <p class="setup-note">Prepara localización, objetivos, cuartel, 5 cartas en HQ y colmena. Después elige avatar y roba tu mano inicial.</p>
+      <p class="setup-note">Sustituye la mesa actual. Puedes recuperarla con Deshacer.</p>
+      <p id="setup-error" role="alert" hidden></p>
+    </div>
+    <div class="setup-footer"><button id="setup-submit" type="submit">Preparar partida</button></div>
+  </form>
+</div>
+<div id="inspector" class="overlay" hidden role="dialog" aria-modal="true" aria-labelledby="inspector-title">
+  <div class="inspector-box">
+    <div class="modal-head"><span id="inspector-title">Carta</span><button id="inspector-close">Cerrar</button></div>
+    <div id="inspector-body"><img id="inspector-image" alt="Carta seleccionada"><div id="inspector-actions"></div></div>
+  </div>
+</div>
+<div id="modal" class="overlay" hidden role="dialog" aria-modal="true" aria-labelledby="modal-title">
+  <div class="modal-box">
+    <div class="modal-head"><span id="modal-title"></span><button id="modal-close">Cerrar</button></div>
+    <div id="modal-body"></div>
+  </div>
+</div>
+<div id="help" class="overlay" hidden role="dialog" aria-modal="true" aria-labelledby="help-title">
+  <div class="modal-box">
+    <div class="modal-head"><span id="help-title">Cómo usar la mesa</span><button id="help-close">Cerrar</button></div>
+    <ul>
+      <li><b>Un clic o toque</b> en un mazo: selecciona solo la carta superior. <b>Doble clic o doble toque</b>: selecciona el mazo entero. Después toca el destino.</li>
+      <li><b>Acciones:</b> selecciona una carta o mazo y pulsa «Acciones» para ampliar, voltear, barajar o robar. Las cartas boca abajo siguen ocultas.</li>
+      <li><b>Mantén Espacio</b> con el ratón sobre una carta, o con una carta seleccionada, para ampliarla. Suelta la tecla para cerrar. También funciona en la mano.</li>
+      <li><b>Ampliar:</b> muestra solo la carta, sin marco. Si usas el botón, toca fuera de la carta, pulsa × o Escape para cerrar. Ambas formas conservan su orientación y la disposición de la mesa.</li>
+      <li><b>Colocar:</b> elige «Colocar en mesa» y toca el destino. También puedes arrastrar cartas.</li>
+      <li><b>Vista:</b> pellizca con dos dedos o usa +/−. Los accesos de arriba acercan cada zona. En horizontal verás más tablero.</li>
+      <li><b>Tu mano:</b> desliza para recorrer las cartas; toca una para jugarla. Puedes plegar la mano para ganar espacio.</li>
+      <li><b>Strikes, Draw, Avatar y Discard:</b> son zonas fijas del jugador. Coloca las cartas encima; quedan centradas sin mezclar la base en el mazo.</li>
+      <li><b>Contadores:</b> cada jugador dispone de Strikes, Combate y Estrellas. Usa +/−; en móvil, toca el contador para abrir botones grandes.</li>
+      <li><b>Arrastrar un mazo</b>: saca solo la carta superior. Para moverlo entero, haz doble clic y arrastra, o usa <b>Shift + arrastrar</b>. Soltar encima de otra carta o mazo: apilar.</li>
+      <li><b>Arrastrar fondo</b>: desplazar mesa. <b>Rueda</b>: zoom.</li>
+      <li><b>Clic derecho</b>: menú de acciones.</li>
+      <li>Con el ratón encima: <b>F</b> voltear · <b>R</b> barajar · <b>Q/E</b> girar · <b>D</b> robar a la mano · <b>1–9</b> robar N · <b>S</b> buscar · <b>Mantener Espacio</b> ampliar</li>
+      <li><b>Mano</b>: toca una carta y elige «Jugar al centro» o «Colocar en mesa». Con ratón también puedes arrastrarla.</li>
+      <li><b>Ctrl+Z</b> deshacer. La partida se guarda sola en el navegador.</li>
+    </ul>
+    <button id="btn-reset">Reiniciar mesa</button>
+  </div>
+</div>
+<script src="setup.js?v=7"></script>
+<script src="app.js?v=9"></script>
+</body>
+</html>
