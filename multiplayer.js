@@ -65,6 +65,9 @@ window.AlienRooms = class {
   }
   receive(data) {
     if (!this.active || data.room.code !== this.code || data.room.revision < this.revision) return;
+    // Polling and action responses can deliver the same state in either order.
+    // Still accept player presence updates without rendering that state twice.
+    if (data.room.revision === this.revision && data.state) data = { room: data.room };
     this.revision = data.room.revision;
     this.room = data.room;
     this.connection(true);

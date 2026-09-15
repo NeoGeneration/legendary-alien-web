@@ -22,6 +22,7 @@ let activeZone = 'playmat';
 let placement = null;
 let statusTimer;
 let inspectorPointerStarted = false;
+let inspectorTarget = null;
 const DOUBLE_TAP_MS = 400;
 let lastStackTap = null;
 let cardZoom = null;
@@ -107,6 +108,9 @@ function updateRoomUI() {
 function applyRemote(data) {
   const previous = new Map(state.objects.map(o => [o.id, o]));
   const next = data.state;
+  const inspectorChanged = inspectorTarget?.kind === 'object'
+    ? !next.objects.some(o => o.id === inspectorTarget.id && o.v === inspectorTarget.version)
+    : inspectorTarget?.kind === 'hand' && !next.hand.some(c => c.uid === inspectorTarget.uid);
   const selected = placement?.kind === 'stack' && previous.get(placement.id);
   if (selected && !next.objects.some(o => o.id === selected.id && o.v === selected.v)) cancelPlacement();
   if (placement?.kind === 'hand' && !next.hand.some(c => c.uid === placement.card.uid)) cancelPlacement();
@@ -119,7 +123,7 @@ function applyRemote(data) {
   for (const o of next.objects) if (previous.get(o.id) !== o) renderObj(o);
   zTop = Math.max(1, ...next.objects.map(o => o.z_ || 0));
   if (handChanged) renderHand();
-  closeInspector();
+  if (inspectorChanged) closeInspector();
   $('#menu').hidden = true;
 }
 
@@ -610,7 +614,7 @@ function undo() {
 function showPreview(src) { $('#preview img').src = src; $('#preview').hidden = false; }
 function hidePreview() { $('#preview').hidden = true; }
 
-function closeInspector() { $('#inspector').hidden = true; }
+function closeInspector() { $('#inspector').hidden = true; inspectorTarget = null; }
 
 function fitCardZoom() {
   if (!cardZoom) return;
@@ -683,6 +687,7 @@ function inspect(title, src, actions) {
 
 function inspectObject(o) {
   if (!o) return;
+  inspectorTarget = { kind: 'object', id: o.id, version: o.v };
   if (o.type === 'stack') {
     const count = o.cards.length;
     inspect(`${o.name || (count > 1 ? 'Mazo' : 'Carta')} · ${count} ${count === 1 ? 'carta' : 'cartas'}`,
@@ -714,6 +719,7 @@ function inspectObject(o) {
 }
 
 function inspectHand(card) {
+  inspectorTarget = { kind: 'hand', uid: card.uid };
   inspect(card.name || 'Carta de tu mano', card.face, [
     ['Ampliar', () => openCardZoom(card)],
     ['Jugar al centro', () => {
