@@ -11,12 +11,12 @@ window.AlienRooms = class {
     this.generation = 0;
     const resume = () => {
       if (!this.active) return;
-      if (this.live && Date.now() - this.lastMessage > 45000) { this.socket?.close(); this.stream?.abort(); }
+      if (this.live && Date.now() - this.lastMessage > 45000) { this.socket?.close(); this.stream?.abort(); this.waiter?.abort(); }
       clearTimeout(this.retryTimer); this.openLive(); this.poll();
     };
     addEventListener('online', resume);
     addEventListener('offline', () => {
-      if (this.active) { this.connection(false); this.socket?.close(); this.stream?.abort(); }
+      if (this.active) { this.connection(false); this.socket?.close(); this.stream?.abort(); this.waiter?.abort(); }
     });
     document.addEventListener('visibilitychange', () => { if (!document.hidden) resume(); });
   }
@@ -94,6 +94,7 @@ window.AlienRooms = class {
     clearInterval(this.pingTimer); this.pingTimer = null;
     const socket = this.socket;
     this.stream?.abort(); this.stream = null; this.preferStream = false; this.transport = null;
+    this.waiter?.abort(); this.waiter = null;
     this.socket = null; this.live = false; this.opening = false;
     this.polling = false; this.refreshAgain = false; this.retryCount = 0;
     socket?.close();
@@ -105,13 +106,14 @@ window.AlienRooms = class {
     this.retryTimer = setTimeout(() => this.openLive(), delay);
   }
   async openLive() {
-    if (!this.active || this.socket || this.stream || this.opening || !navigator.onLine) return;
+    if (!this.active || this.socket || this.stream || this.waiter || this.opening || !navigator.onLine) return;
     const generation = this.generation, code = this.code;
     this.opening = true;
     try {
       if (this.preferStream) { await this.openStream(generation, code); return; }
-      const { ticket } = await this.request(`/rooms/${code}/live-ticket`, this.sessionToken, {});
+      const { ticket, transport } = await this.request(`/rooms/${code}/live-ticket`, this.sessionToken, {});
       if (!this.active || generation !== this.generation) return;
+      if (transport === 'wait') { this.openWait(generation, code); return; }
       const url = new URL(`${this.api}/rooms/${code}/events`);
       url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
       const socket = this.socket = new WebSocket(url, ['alien-v1', `ticket.${ticket}`]);
@@ -150,6 +152,36 @@ window.AlienRooms = class {
       this.live = true; this.retryCount = 0;
       this.poll();
     } else if (message.type === 'presence' || (message.type === 'changed' && message.revision > this.revision)) this.poll();
+  }
+  openWait(generation, code) {
+    const controller = this.waiter = new AbortController();
+    const current = () => this.active && generation === this.generation && this.waiter === controller;
+    this.transport = 'wait';
+    const read = async () => {
+      let since = -1;
+      while (current()) {
+        const timer = setTimeout(() => controller.abort(), 28000);
+        let response, message;
+        try {
+          response = await fetch(`${this.api}/rooms/${code}/live-next?since=${since}`, {
+            signal: controller.signal, headers: { Authorization: `Bearer ${this.sessionToken}`, 'X-App-Session': window.AlienAccess.token() }, cache: 'no-store', credentials: 'omit'
+          });
+          message = await response.json();
+        } finally { clearTimeout(timer); }
+        if (!current()) return;
+        if (!response.ok) {
+          if (message.code === 'APP_ACCESS_REQUIRED') window.AlienAccess.requireLogin();
+          throw new Error(message.error || 'Conexión en directo no disponible.');
+        }
+        this.liveMessage(JSON.stringify(message));
+        since = Math.max(this.revision, since, Number.isSafeInteger(message.revision) ? message.revision : -1);
+      }
+    };
+    read().catch(() => {}).finally(() => {
+      if (!current()) return;
+      this.waiter = null; this.live = false;
+      this.schedule(); this.retryLive(generation);
+    });
   }
   async openStream(generation, code) {
     const controller = this.stream = new AbortController();
