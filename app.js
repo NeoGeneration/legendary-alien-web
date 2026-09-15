@@ -28,6 +28,7 @@ let lastStackTap = null;
 let cardZoom = null;
 let online = null;
 let individualState = null, individualUndo = null, pendingRemote = null;
+let cancelHandGesture = null;
 
 const els = new Map();   // id -> elemento DOM
 function counterIcon(resource) {
@@ -111,6 +112,9 @@ function applyRemote(data) {
   const inspectorChanged = inspectorTarget?.kind === 'object'
     ? !next.objects.some(o => o.id === inspectorTarget.id && o.v === inspectorTarget.version)
     : inspectorTarget?.kind === 'hand' && !next.hand.some(c => c.uid === inspectorTarget.uid);
+  const inspected = inspectorTarget?.kind === 'object' && next.objects.find(o => o.id === inspectorTarget.id);
+  const keepInspector = inspectorChanged && inspectorTarget?.keepOpen && inspected?.type === 'stack'
+    && inspected.cards.length === previous.get(inspected.id)?.cards?.length;
   const selected = placement?.kind === 'stack' && previous.get(placement.id);
   if (selected && !next.objects.some(o => o.id === selected.id && o.v === selected.v)) cancelPlacement();
   if (placement?.kind === 'hand' && !next.hand.some(c => c.uid === placement.card.uid)) cancelPlacement();
@@ -123,12 +127,13 @@ function applyRemote(data) {
   for (const o of next.objects) if (previous.get(o.id) !== o) renderObj(o);
   zTop = Math.max(1, ...next.objects.map(o => o.z_ || 0));
   if (handChanged) renderHand();
-  if (inspectorChanged) closeInspector();
+  if (keepInspector) refreshStackInspector(inspected);
+  else if (inspectorChanged) closeInspector();
   $('#menu').hidden = true;
 }
 
 function flushRemote() {
-  if (!pendingRemote || drag?.changed || suppressHandClick) return;
+  if (!pendingRemote || drag?.changed || suppressHandClick || cancelHandGesture) return;
   const data = pendingRemote; pendingRemote = null;
   if (online?.active) applyRemote(data);
 }
@@ -481,7 +486,7 @@ function renderHand() {
     img.draggable = false;
     img.onpointerenter = e => { if (e.pointerType === 'mouse') hoveredHandCard = card; };
     img.onpointerleave = () => { if (hoveredHandCard === card) hoveredHandCard = null; hidePreview(); };
-    img.onpointerdown = e => { if (e.pointerType === 'mouse') startHandDrag(e, i); };
+    img.onpointerdown = e => startHandDrag(e, i);
     img.onclick = e => { if (!suppressHandClick) inspectHand(card); };
     img.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); inspectHand(card); } };
     box.appendChild(img);
@@ -527,6 +532,7 @@ function doShuffle(o) {
   shuffle(o.cards);
   renderObj(o); save();
   status('Barajado');
+  if (inspectorTarget?.id === o.id) refreshStackInspector(o);
 }
 
 function rotate(o, d) {
@@ -675,14 +681,25 @@ function inspect(title, src, actions) {
   if (src) img.src = src;
   const box = $('#inspector-actions');
   box.innerHTML = '';
-  actions.forEach(([label, fn]) => {
+  actions.forEach(([label, fn, keepOpen]) => {
     const button = document.createElement('button');
     button.textContent = label;
-    button.onclick = () => { closeInspector(); fn(); };
+    button.onclick = () => {
+      if (keepOpen && inspectorTarget) inspectorTarget.keepOpen = true;
+      else closeInspector();
+      fn();
+    };
     box.appendChild(button);
   });
   $('#inspector').hidden = false;
   $('#inspector-close').focus({ preventScroll: true });
+}
+
+function refreshStackInspector(o) {
+  const count = o.cards.length;
+  $('#inspector-title').textContent = `${o.name || (count > 1 ? 'Mazo' : 'Carta')} · ${count} ${count === 1 ? 'carta' : 'cartas'}`;
+  $('#inspector-image').src = o.faceUp ? o.cards[0].face : o.cards[0].back;
+  if (inspectorTarget) inspectorTarget.version = o.v;
 }
 
 function inspectObject(o) {
@@ -690,19 +707,20 @@ function inspectObject(o) {
   inspectorTarget = { kind: 'object', id: o.id, version: o.v };
   if (o.type === 'stack') {
     const count = o.cards.length;
+    const current = () => byId(o.id);
     inspect(`${o.name || (count > 1 ? 'Mazo' : 'Carta')} · ${count} ${count === 1 ? 'carta' : 'cartas'}`,
       o.faceUp ? o.cards[0].face : o.cards[0].back, [
-        ['Ampliar', () => openCardZoom(o.cards[0], o.faceUp, o.rot - 180)],
-        ['Robar 1', () => drawToHand(o, 1)],
-        ...(count > 1 ? [['Robar 6', () => drawToHand(o, 6)]] : []),
-        ['Voltear', async () => { await flip(o); inspectObject(byId(o.id)); }],
+        ['Ampliar', () => { const latest = current(); if (latest) openCardZoom(latest.cards[0], latest.faceUp, latest.rot - 180); }],
+        ['Robar 1', () => drawToHand(current(), 1)],
+        ...(count > 1 ? [['Robar 6', () => drawToHand(current(), 6)]] : []),
+        ['Voltear', async () => { await flip(current()); inspectObject(current()); }],
         ['Colocar en mesa', () => beginPlacement({ kind: 'stack', id: o.id, one: count > 1 })],
         ...(count > 1 ? [
           ['Mover mazo', () => beginPlacement({ kind: 'stack', id: o.id })],
-          ['Barajar', () => doShuffle(o)],
-          ['Ver cartas', () => openSearch(o)]
+          ['Barajar', () => doShuffle(current()), true],
+          ['Ver cartas', () => openSearch(current())]
         ] : []),
-        ['Girar', () => rotate(o, 90)]
+        ['Girar', () => rotate(current(), 90)]
       ]);
   } else if (o.type === 'bag') {
     inspect(o.name, null, [['Sacar ficha', () => spawnFromBag(o)], ['Mover', () => beginPlacement({ kind: 'stack', id: o.id })]]);
@@ -1078,42 +1096,82 @@ viewport.addEventListener('wheel', e => {
 
 // Arrastrar desde la mano a la mesa
 function startHandDrag(e, i) {
-  if (e.button !== 0) return;
+  if (e.button !== 0 || !e.isPrimary || cancelHandGesture || drag || pinch) return;
   const card = state.hand[i];
-  let ghost = null;
+  if (!card) return;
+  const source = e.currentTarget, rect = source.getBoundingClientRect(), pointerId = e.pointerId;
+  const offsetX = e.clientX - rect.left, offsetY = e.clientY - rect.top;
+  let ghost = null, ended = false;
+  source.setPointerCapture(pointerId);
+  const clearDrop = () => document.querySelectorAll('.drop').forEach(el => el.classList.remove('drop'));
+  const onTable = ev => {
+    const r = viewport.getBoundingClientRect();
+    return ev.clientX >= r.left && ev.clientX <= r.right && ev.clientY >= r.top && ev.clientY < r.bottom
+      && viewport.contains(document.elementFromPoint(ev.clientX, ev.clientY));
+  };
   const move = ev => {
-    if (!ghost && Math.hypot(ev.clientX - e.clientX, ev.clientY - e.clientY) < 8) return;
+    if (ev.pointerId !== pointerId) return;
+    const dx = ev.clientX - e.clientX, dy = ev.clientY - e.clientY;
+    if (!ghost && (Math.hypot(dx, dy) < 8 || (e.pointerType === 'touch' && Math.abs(dy) <= Math.abs(dx)))) return;
     if (!ghost) {
+      cancelPlacement(); closeInspector(); $('#menu').hidden = true;
       ghost = document.createElement('img');
       ghost.id = 'drag-ghost';
       ghost.src = card.face;
+      ghost.alt = '';
+      ghost.style.width = `${rect.width}px`;
+      ghost.style.height = `${rect.height}px`;
       document.body.appendChild(ghost);
+      source.classList.add('hand-dragging');
       suppressHandClick = true;
       hidePreview();
     }
-    ghost.style.left = ev.clientX - 45 + 'px';
-    ghost.style.top = ev.clientY - 65 + 'px';
+    ev.preventDefault();
+    ghost.style.left = ev.clientX - offsetX + 'px';
+    ghost.style.top = ev.clientY - offsetY + 'px';
+    clearDrop();
+    if (onTable(ev)) {
+      const target = { type: 'stack', scale: 1.47, ...screenToWorld(ev.clientX, ev.clientY) };
+      const zone = findPlayerZone(target);
+      if (zone) Object.assign(target, { x: zone.x, z: zone.z });
+      const drop = findDropTarget(target) || zone;
+      if (drop) els.get(drop.id)?.classList.add('drop');
+    }
   };
   const cleanup = () => {
+    if (ended) return;
+    ended = true;
+    cancelHandGesture = null;
     removeEventListener('pointermove', move);
     removeEventListener('pointerup', up);
-    removeEventListener('pointercancel', cleanup);
+    removeEventListener('pointercancel', canceled);
+    removeEventListener('pointerdown', secondPointer, true);
+    removeEventListener('blur', cleanup);
+    source.removeEventListener('lostpointercapture', cleanup);
+    if (source.hasPointerCapture(pointerId)) source.releasePointerCapture(pointerId);
+    source.classList.remove('hand-dragging');
     ghost?.remove();
+    clearDrop();
     setTimeout(() => { suppressHandClick = false; flushRemote(); }, 0);
   };
   const up = ev => {
-    if (ghost) {
-      const vr = viewport.getBoundingClientRect();
-      if (ev.clientY < vr.bottom && ev.clientY > vr.top) {
-        beginPlacement({ kind: 'hand', card });
-        placeAt(screenToWorld(ev.clientX, ev.clientY));
-      }
-    }
+    if (ev.pointerId !== pointerId) return;
+    const place = ghost && onTable(ev);
     cleanup();
+    if (place) {
+      beginPlacement({ kind: 'hand', card });
+      placeAt(screenToWorld(ev.clientX, ev.clientY));
+    }
   };
-  addEventListener('pointermove', move);
+  const canceled = ev => { if (ev.pointerId === pointerId) cleanup(); };
+  const secondPointer = ev => { if (ev.pointerId !== pointerId) cleanup(); };
+  cancelHandGesture = cleanup;
+  addEventListener('pointermove', move, { passive: false });
   addEventListener('pointerup', up);
-  addEventListener('pointercancel', cleanup);
+  addEventListener('pointercancel', canceled);
+  addEventListener('pointerdown', secondPointer, true);
+  addEventListener('blur', cleanup);
+  source.addEventListener('lostpointercapture', cleanup);
 }
 
 // Teclado
@@ -1128,7 +1186,7 @@ addEventListener('keydown', e => {
     return;
   }
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); undo(); return; }
-  if (e.key === 'Escape') { closeModal(); closeInspector(); cancelPlacement(); $('#help').hidden = true; $('#setup').hidden = true; $('#room-dialog').hidden = true; $('#menu').hidden = true; return; }
+  if (e.key === 'Escape') { cancelHandGesture?.(); closeModal(); closeInspector(); cancelPlacement(); $('#help').hidden = true; $('#setup').hidden = true; $('#room-dialog').hidden = true; $('#menu').hidden = true; return; }
   if (!$('#inspector').hidden || !$('#modal').hidden || !$('#help').hidden || !$('#setup').hidden || !$('#room-dialog').hidden) return;
   if (e.target.closest?.('input, textarea, select, [contenteditable="true"]')) return;
   if (space) {

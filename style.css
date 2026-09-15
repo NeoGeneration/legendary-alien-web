@@ -104,7 +104,8 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--accent
 #hand-cards { flex: 1; min-height: 0; display: flex; gap: 8px; padding: 0 14px 10px; overflow-x: auto; align-items: center;
   touch-action: pan-x; overscroll-behavior-x: contain; }
 #hand-cards p { color: #92a398; margin: auto; text-align: center; font-size: 12px; padding: 8px; max-width: 340px; }
-#hand-cards img { height: 100%; width: auto; flex-shrink: 0; border-radius: 5px; cursor: pointer; object-fit: contain; -webkit-user-drag: none; }
+#hand-cards img { height: 100%; width: auto; flex-shrink: 0; border-radius: 5px; cursor: grab; object-fit: contain; -webkit-user-drag: none; touch-action: pan-x; -webkit-touch-callout: none; }
+#hand-cards img.hand-dragging { opacity: .35; cursor: grabbing; }
 #hand.collapsed #hand-cards { display: none; }
 #hand.drop { background: #293c22; }
 #preview { position: fixed; right: 12px; top: calc(var(--header-h) + var(--zones-h) + 12px); z-index: 20; pointer-events: none; }

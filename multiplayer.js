@@ -11,12 +11,12 @@ window.AlienRooms = class {
     this.generation = 0;
     const resume = () => {
       if (!this.active) return;
-      if (this.live && Date.now() - this.lastMessage > 45000) this.socket.close();
+      if (this.live && Date.now() - this.lastMessage > 45000) { this.socket?.close(); this.stream?.abort(); }
       clearTimeout(this.retryTimer); this.openLive(); this.poll();
     };
     addEventListener('online', resume);
     addEventListener('offline', () => {
-      if (this.active) { this.connection(false); this.socket?.close(); }
+      if (this.active) { this.connection(false); this.socket?.close(); this.stream?.abort(); }
     });
     document.addEventListener('visibilitychange', () => { if (!document.hidden) resume(); });
   }
@@ -91,8 +91,9 @@ window.AlienRooms = class {
   stopLive() {
     this.generation++;
     clearTimeout(this.timer); clearTimeout(this.retryTimer); clearTimeout(this.connectTimer);
-    clearInterval(this.pingTimer);
+    clearInterval(this.pingTimer); this.pingTimer = null;
     const socket = this.socket;
+    this.stream?.abort(); this.stream = null; this.preferStream = false; this.transport = null;
     this.socket = null; this.live = false; this.opening = false;
     this.polling = false; this.refreshAgain = false; this.retryCount = 0;
     socket?.close();
@@ -104,10 +105,11 @@ window.AlienRooms = class {
     this.retryTimer = setTimeout(() => this.openLive(), delay);
   }
   async openLive() {
-    if (!this.active || this.socket || this.opening || !navigator.onLine) return;
+    if (!this.active || this.socket || this.stream || this.opening || !navigator.onLine) return;
     const generation = this.generation, code = this.code;
     this.opening = true;
     try {
+      if (this.preferStream) { await this.openStream(generation, code); return; }
       const { ticket } = await this.request(`/rooms/${code}/live-ticket`, this.sessionToken, {});
       if (!this.active || generation !== this.generation) return;
       const url = new URL(`${this.api}/rooms/${code}/events`);
@@ -117,34 +119,79 @@ window.AlienRooms = class {
       this.connectTimer = setTimeout(() => { if (current()) socket.close(); }, 12000);
       socket.onmessage = event => {
         if (!current()) return;
-        this.lastMessage = Date.now();
-        if (event.data === 'pong') return;
-        let message; try { message = JSON.parse(event.data); } catch { return; }
-        if (message.type === 'ready') {
+        this.liveMessage(event.data);
+        if (this.live && !this.pingTimer) {
           clearTimeout(this.connectTimer);
-          this.live = true; this.retryCount = 0;
-          clearInterval(this.pingTimer);
+          this.transport = 'websocket';
           this.pingTimer = setInterval(() => {
             if (!current()) return;
             if (Date.now() - this.lastMessage > 45000) socket.close();
             else if (socket.readyState === WebSocket.OPEN) socket.send('ping');
           }, 20000);
-          // Close the gap between joining/fetching a ticket and subscribing.
-          this.poll();
-        } else if (message.type === 'presence' || (message.type === 'changed' && message.revision > this.revision)) {
-          this.poll();
         }
       };
       socket.onclose = () => {
         if (!current()) return;
-        clearTimeout(this.connectTimer); clearInterval(this.pingTimer);
+        clearTimeout(this.connectTimer); clearInterval(this.pingTimer); this.pingTimer = null;
         this.socket = null; this.live = false;
+        this.preferStream = true;
         this.schedule(); this.retryLive(generation);
       };
       socket.onerror = () => { if (current()) socket.close(); };
     } catch (error) {
       if (generation === this.generation && error.status !== 401) this.retryLive(generation);
     } finally { if (generation === this.generation) this.opening = false; }
+  }
+  liveMessage(raw) {
+    this.lastMessage = Date.now();
+    if (raw === 'pong') return;
+    let message; try { message = JSON.parse(raw); } catch { return; }
+    if (message.type === 'ready') {
+      this.live = true; this.retryCount = 0;
+      this.poll();
+    } else if (message.type === 'presence' || (message.type === 'changed' && message.revision > this.revision)) this.poll();
+  }
+  async openStream(generation, code) {
+    const controller = this.stream = new AbortController();
+    const current = () => this.active && generation === this.generation && this.stream === controller;
+    const timeout = setTimeout(() => controller.abort(), 12000);
+    const end = () => {
+      if (!current()) return;
+      clearInterval(this.pingTimer); this.pingTimer = null;
+      this.stream = null; this.live = false;
+      this.schedule(); this.retryLive(generation);
+    };
+    try {
+      const response = await fetch(`${this.api}/rooms/${code}/live-stream`, { signal: controller.signal,
+        headers: { Authorization: `Bearer ${this.sessionToken}`, 'X-App-Session': window.AlienAccess.token(), Accept: 'text/event-stream' }, cache: 'no-store', credentials: 'omit' });
+      clearTimeout(timeout);
+      if (!current()) { controller.abort(); return; }
+      if (!response.ok || !response.headers.get('Content-Type')?.startsWith('text/event-stream')) {
+        if (response.status === 401) window.AlienAccess.requireLogin();
+        throw new Error('Conexión en directo no disponible.');
+      }
+      this.transport = 'stream'; this.lastMessage = Date.now();
+      this.pingTimer = setInterval(() => { if (current() && Date.now() - this.lastMessage > 45000) controller.abort(); }, 20000);
+      const read = async () => {
+        const reader = response.body.getReader(), decoder = new TextDecoder();
+        let buffer = '';
+        try {
+          while (current()) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            let end;
+            while ((end = buffer.indexOf('\n\n')) >= 0) {
+              const message = buffer.slice(0, end); buffer = buffer.slice(end + 2);
+              if (current() && message.startsWith('data: ')) this.liveMessage(message.slice(6));
+            }
+            if (buffer.length > 4096) throw new Error('Evento no válido');
+          }
+        } finally { await reader.cancel().catch(() => {}); }
+      };
+      read().catch(() => {}).finally(end);
+    } catch { end(); }
+    finally { clearTimeout(timeout); }
   }
   async poll() {
     if (!this.active) return;
