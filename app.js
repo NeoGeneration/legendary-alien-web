@@ -113,8 +113,8 @@ function applyRemote(data) {
     ? !next.objects.some(o => o.id === inspectorTarget.id && o.v === inspectorTarget.version)
     : inspectorTarget?.kind === 'hand' && !next.hand.some(c => c.uid === inspectorTarget.uid);
   const inspected = inspectorTarget?.kind === 'object' && next.objects.find(o => o.id === inspectorTarget.id);
-  const keepInspector = inspectorChanged && inspectorTarget?.keepOpen && inspected?.type === 'stack'
-    && inspected.cards.length === previous.get(inspected.id)?.cards?.length;
+  const keepInspector = inspectorChanged && inspectorTarget?.keepOpen
+    && (inspected?.type === 'stack' || (!inspected && (inspectorTarget.draw?.pending || inspectorTarget.empty)));
   const selected = placement?.kind === 'stack' && previous.get(placement.id);
   if (selected && !next.objects.some(o => o.id === selected.id && o.v === selected.v)) cancelPlacement();
   if (placement?.kind === 'hand' && !next.hand.some(c => c.uid === placement.card.uid)) cancelPlacement();
@@ -500,20 +500,38 @@ function addStack(cards, x, z, faceUp, scale, rot) {
   return o;
 }
 
-function drawToHand(o, n) {
-  if (!o || o.type !== 'stack') return;
-  if (online?.active) return onlineAction({ type: 'draw', id: o.id, count: n }).then(result => {
-    if (result) { $('#hand').classList.remove('collapsed'); updateHandToggle(); }
-  });
-  pushUndo();
-  const taken = o.cards.splice(0, Math.min(n, o.cards.length));
-  state.hand.push(...taken);
-  if (!o.cards.length) removeObj(o.id); else renderObj(o);
-  renderHand();
-  $('#hand').classList.remove('collapsed');
-  updateHandToggle();
-  save();
-  status(`Robadas ${taken.length}`);
+async function drawToHand(o, n) {
+  if (!o || o.type !== 'stack' || !o.cards.length) return;
+  const target = n === 1 && inspectorTarget?.id === o.id ? inspectorTarget : null;
+  const feedback = target?.draw;
+  if (feedback) {
+    if (online?.active && feedback.pending >= o.cards.length) return;
+    target.keepOpen = true;
+    feedback.pending++; feedback.failed = false;
+    updateActionFeedback(target, 'draw');
+    refreshStackInspector(o);
+  }
+  let result;
+  if (online?.active) {
+    result = await onlineAction({ type: 'draw', id: o.id, count: n });
+  } else {
+    pushUndo();
+    const taken = o.cards.splice(0, Math.min(n, o.cards.length));
+    state.hand.push(...taken);
+    if (!o.cards.length) removeObj(o.id); else renderObj(o);
+    renderHand(); save();
+    status(`Robadas ${taken.length}`);
+    result = true;
+  }
+  if (result) { $('#hand').classList.remove('collapsed'); updateHandToggle(); }
+  if (feedback) {
+    feedback.pending--;
+    if (result) feedback.count++;
+    else feedback.failed = true;
+    updateActionFeedback(target, 'draw');
+    if (inspectorTarget === target) refreshStackInspector(byId(o.id));
+  }
+  return result;
 }
 
 // ---------- Acciones ----------
@@ -525,13 +543,16 @@ function flip(o) {
   renderObj(o); save();
 }
 
-function updateShuffleFeedback(target) {
-  if (inspectorTarget !== target || !target?.shuffle) return;
-  const { count, pending, failed } = target.shuffle;
-  const feedback = $('#shuffle-feedback');
+function updateActionFeedback(target, action) {
+  if (inspectorTarget !== target || !target?.[action]) return;
+  const { count, pending, failed } = target[action];
+  const [done, waiting, error] = action === 'draw'
+    ? ['Robadas', 'Robando…', 'Error al robar']
+    : ['Barajado', 'Barajando…', 'Error al barajar'];
+  const feedback = $(`#${action}-feedback`);
   feedback.textContent = [
-    count ? `Barajado ×${count}` : '',
-    failed ? 'Error al barajar' : pending ? (count ? '…' : 'Barajando…') : ''
+    count ? `${done} ×${count}` : '',
+    failed ? error : pending ? (count ? '…' : waiting) : ''
   ].filter(Boolean).join(' · ');
   feedback.classList.toggle('error', failed);
 }
@@ -544,7 +565,7 @@ async function doShuffle(o) {
   if (feedback) {
     target.keepOpen = true;
     feedback.pending++; feedback.failed = false;
-    updateShuffleFeedback(target);
+    updateActionFeedback(target, 'shuffle');
   }
   let result;
   let succeeded = true;
@@ -562,7 +583,7 @@ async function doShuffle(o) {
     feedback.pending--;
     if (succeeded) feedback.count++;
     else feedback.failed = true;
-    updateShuffleFeedback(target);
+    updateActionFeedback(target, 'shuffle');
   }
   return result;
 }
@@ -719,10 +740,12 @@ function inspect(title, src, actions) {
     if (feedbackId) {
       const feedback = document.createElement('span');
       feedback.id = feedbackId;
+      feedback.className = 'action-feedback';
       feedback.setAttribute('role', 'status');
       feedback.setAttribute('aria-live', 'polite');
       feedback.setAttribute('aria-atomic', 'true');
       button.setAttribute('aria-label', label);
+      button.dataset.feedback = feedbackId;
       button.appendChild(feedback);
     }
     button.onclick = () => {
@@ -737,23 +760,30 @@ function inspect(title, src, actions) {
 }
 
 function refreshStackInspector(o) {
-  const count = o.cards.length;
-  $('#inspector-title').textContent = `${o.name || (count > 1 ? 'Mazo' : 'Carta')} · ${count} ${count === 1 ? 'carta' : 'cartas'}`;
-  $('#inspector-image').src = o.faceUp ? o.cards[0].face : o.cards[0].back;
-  if (inspectorTarget) inspectorTarget.version = o.v;
+  const count = o?.cards?.length || 0;
+  const name = o?.name || inspectorTarget?.name || (count > 1 ? 'Mazo' : 'Carta');
+  $('#inspector-title').textContent = `${name} · ${count ? `${count} ${count === 1 ? 'carta' : 'cartas'}` : 'Mazo agotado'}`;
+  $('#inspector-image').hidden = !count;
+  if (count) $('#inspector-image').src = o.faceUp ? o.cards[0].face : o.cards[0].back;
+  if (inspectorTarget) { inspectorTarget.version = o?.v; inspectorTarget.empty = !count; }
+  for (const button of $('#inspector-actions').children) {
+    button.disabled = count < (button.dataset.feedback === 'shuffle-feedback' ? 2 : 1)
+      || (button.dataset.feedback === 'draw-feedback' && (inspectorTarget?.draw?.pending || 0) >= count);
+  }
 }
 
 function inspectObject(o) {
   if (!o) return;
-  inspectorTarget = { kind: 'object', id: o.id, version: o.v };
+  inspectorTarget = { kind: 'object', id: o.id, version: o.v, name: o.name };
   if (o.type === 'stack') {
     const count = o.cards.length;
+    inspectorTarget.draw = { count: 0, pending: 0, failed: false };
     if (count > 1) inspectorTarget.shuffle = { count: 0, pending: 0, failed: false };
     const current = () => byId(o.id);
     inspect(`${o.name || (count > 1 ? 'Mazo' : 'Carta')} · ${count} ${count === 1 ? 'carta' : 'cartas'}`,
       o.faceUp ? o.cards[0].face : o.cards[0].back, [
         ['Ampliar', () => { const latest = current(); if (latest) openCardZoom(latest.cards[0], latest.faceUp, latest.rot - 180); }],
-        ['Robar 1', () => drawToHand(current(), 1)],
+        ['Robar 1', () => drawToHand(current(), 1), true, 'draw-feedback'],
         ...(count > 1 ? [['Robar 6', () => drawToHand(current(), 6)]] : []),
         ['Voltear', async () => { await flip(current()); inspectObject(current()); }],
         ['Colocar en mesa', () => beginPlacement({ kind: 'stack', id: o.id, one: count > 1 })],
