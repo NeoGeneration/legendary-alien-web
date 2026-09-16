@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0b0f0e">
 <title>Legendary Encounters: Alien — Mesa</title>
-<link rel="stylesheet" href="style.css?v=12">
+<link rel="stylesheet" href="style.css?v=13">
 </head>
 <body class="access-locked">
 <main id="app-access">
@@ -68,7 +68,7 @@
           <input id="room-code" maxlength="12" autocapitalize="characters" autocomplete="off" spellcheck="false" placeholder="8 letras o números">
           <button id="room-join">Entrar en la sala</button>
         </div>
-        <p class="setup-note">Tu partida individual se conserva. Al salir de la sala volverás a ella.</p>
+        <p class="setup-note">Tu partida individual se guarda aparte y se conserva al crear o entrar en una sala. Puedes alternar entre ambas.</p>
       </div>
       <div id="room-current" hidden>
         <p id="room-connection" role="status">Conectando…</p>
@@ -76,7 +76,7 @@
         <input id="room-link" readonly aria-label="Enlace de invitación">
         <button id="room-copy">Copiar enlace</button>
         <ol id="room-players" aria-label="Jugadores de la sala"></ol>
-        <p class="setup-note">Al cerrar o salir conservas tu sitio y tu mano. Abre este enlace en el mismo navegador para volver. El anfitrión prepara la mesa para todos.</p>
+        <p class="setup-note">Al cerrar o volver a tu partida individual, la sala conserva su propia partida, tu sitio y tu mano. Guarda este enlace y ábrelo en el mismo navegador para retomarla. El anfitrión prepara la mesa para todos.</p>
         <button id="room-leave">Volver a mi partida individual</button>
       </div>
       <p id="room-error" role="alert" hidden></p>
@@ -144,6 +144,6 @@
 <script src="multiplayer-config.js?v=1"></script>
 <script src="access.js?v=1"></script>
   <script src="multiplayer.js?v=6"></script>
-<script src="app.js?v=13"></script>
+<script src="app.js?v=14"></script>
 </body>
 </html>

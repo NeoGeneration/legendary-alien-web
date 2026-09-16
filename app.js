@@ -525,14 +525,46 @@ function flip(o) {
   renderObj(o); save();
 }
 
-function doShuffle(o) {
-  if (o.cards.length < 2) return;
-  if (online?.active) return onlineAction({ type: 'shuffle', id: o.id });
-  pushUndo();
-  shuffle(o.cards);
-  renderObj(o); save();
-  status('Barajado');
-  if (inspectorTarget?.id === o.id) refreshStackInspector(o);
+function updateShuffleFeedback(target) {
+  if (inspectorTarget !== target || !target?.shuffle) return;
+  const { count, pending, failed } = target.shuffle;
+  const feedback = $('#shuffle-feedback');
+  feedback.textContent = [
+    count ? `Barajado ×${count}` : '',
+    failed ? 'Error al barajar' : pending ? (count ? '…' : 'Barajando…') : ''
+  ].filter(Boolean).join(' · ');
+  feedback.classList.toggle('error', failed);
+}
+
+async function doShuffle(o) {
+  if (!o || o.cards.length < 2) return;
+  // Feedback belongs to this open panel, never to the saved game or a later panel.
+  const target = inspectorTarget?.id === o.id ? inspectorTarget : null;
+  const feedback = target?.shuffle;
+  if (feedback) {
+    target.keepOpen = true;
+    feedback.pending++; feedback.failed = false;
+    updateShuffleFeedback(target);
+  }
+  let result;
+  let succeeded = true;
+  if (online?.active) {
+    result = await onlineAction({ type: 'shuffle', id: o.id });
+    succeeded = Boolean(result);
+  } else {
+    pushUndo();
+    shuffle(o.cards);
+    renderObj(o); save();
+    status('Barajado');
+    if (inspectorTarget?.id === o.id) refreshStackInspector(o);
+  }
+  if (feedback) {
+    feedback.pending--;
+    if (succeeded) feedback.count++;
+    else feedback.failed = true;
+    updateShuffleFeedback(target);
+  }
+  return result;
 }
 
 function rotate(o, d) {
@@ -681,9 +713,18 @@ function inspect(title, src, actions) {
   if (src) img.src = src;
   const box = $('#inspector-actions');
   box.innerHTML = '';
-  actions.forEach(([label, fn, keepOpen]) => {
+  actions.forEach(([label, fn, keepOpen, feedbackId]) => {
     const button = document.createElement('button');
     button.textContent = label;
+    if (feedbackId) {
+      const feedback = document.createElement('span');
+      feedback.id = feedbackId;
+      feedback.setAttribute('role', 'status');
+      feedback.setAttribute('aria-live', 'polite');
+      feedback.setAttribute('aria-atomic', 'true');
+      button.setAttribute('aria-label', label);
+      button.appendChild(feedback);
+    }
     button.onclick = () => {
       if (keepOpen && inspectorTarget) inspectorTarget.keepOpen = true;
       else closeInspector();
@@ -707,6 +748,7 @@ function inspectObject(o) {
   inspectorTarget = { kind: 'object', id: o.id, version: o.v };
   if (o.type === 'stack') {
     const count = o.cards.length;
+    if (count > 1) inspectorTarget.shuffle = { count: 0, pending: 0, failed: false };
     const current = () => byId(o.id);
     inspect(`${o.name || (count > 1 ? 'Mazo' : 'Carta')} · ${count} ${count === 1 ? 'carta' : 'cartas'}`,
       o.faceUp ? o.cards[0].face : o.cards[0].back, [
@@ -717,7 +759,7 @@ function inspectObject(o) {
         ['Colocar en mesa', () => beginPlacement({ kind: 'stack', id: o.id, one: count > 1 })],
         ...(count > 1 ? [
           ['Mover mazo', () => beginPlacement({ kind: 'stack', id: o.id })],
-          ['Barajar', () => doShuffle(current()), true],
+          ['Barajar', () => doShuffle(current()), true, 'shuffle-feedback'],
           ['Ver cartas', () => openSearch(current())]
         ] : []),
         ['Girar', () => rotate(current(), 90)]
