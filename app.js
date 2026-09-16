@@ -30,6 +30,8 @@ let cardZoom = null;
 let online = null;
 let individualState = null, individualUndo = null, pendingRemote = null;
 let cancelHandGesture = null;
+let syncingDevice = false;
+let displayedPrivateCode = null;
 
 const els = new Map();   // id -> elemento DOM
 function counterIcon(resource) {
@@ -85,6 +87,65 @@ function updateBackupUI() {
   try { previous = Boolean(localStorage.getItem(PRE_IMPORT_KEY)); } catch {}
   $('#backup-previous').hidden = !previous;
   $('#backup-previous').disabled = Boolean(online?.active);
+  let privateCode = '';
+  if (online?.active) {
+    if (displayedPrivateCode?.room === online.code) privateCode = displayedPrivateCode.code;
+    try { privateCode ||= localStorage.getItem(`lea-resume-code-v1:${online.code}`) || ''; } catch {}
+  }
+  $('#sync-current').hidden = !privateCode;
+  $('#sync-private-code').value = privateCode;
+  $('#sync-generate').textContent = online?.active ? 'Mostrar mi código privado' : 'Sincronizar y generar código';
+}
+
+function syncMessage(message, error = false) {
+  $('#sync-message').textContent = message;
+  $('#sync-message').classList.toggle('error', error);
+}
+
+function rememberPrivateCode(code) {
+  displayedPrivateCode = { room: online.code, code };
+  try { localStorage.setItem(`lea-resume-code-v1:${online.code}`, code); } catch {}
+}
+
+async function deviceOperation(task) {
+  if (syncingDevice || importingBackup) return;
+  syncingDevice = true;
+  const buttons = [...$('#help').querySelectorAll('button')].map(button => [button, button.disabled]);
+  for (const [button] of buttons) button.disabled = true;
+  syncMessage('Guardando y conectando… Tu partida actual se conserva.');
+  try { await task(); }
+  catch (error) { syncMessage(['TypeError', 'AbortError'].includes(error.name) ? 'No se pudo conectar. Tu partida actual sigue guardada; vuelve a intentarlo.' : error.message, true); }
+  finally {
+    syncingDevice = false;
+    for (const [button, disabled] of buttons) button.disabled = disabled;
+    updateBackupUI(); updateRoomUI();
+  }
+}
+
+async function generatePrivateCode() {
+  await online.queue;
+  let result;
+  if (online.active) result = await online.continuation();
+  else {
+    // Require a durable local backup before creating the synchronized copy.
+    const snapshot = clone(state);
+    try { localStorage.setItem(SAVE_KEY, JSON.stringify(snapshot)); }
+    catch { throw new Error('No se ha podido guardar el respaldo local. Tu mesa sigue intacta; no se ha iniciado la sincronización.'); }
+    result = await online.promote($('#room-name').value.trim() || 'Jugador', snapshot);
+    focusZone('playmat');
+  }
+  rememberPrivateCode(result.privateCode);
+  $('#help').hidden = false;
+  syncMessage('Partida sincronizada. Introduce este código privado en el otro dispositivo para continuar con tu mismo jugador y tu mano.');
+}
+
+async function resumePrivateCode() {
+  if (online?.active) throw new Error('Primero pulsa Sala → Volver a mi partida individual. Tu sala quedará guardada.');
+  const result = await online.recover($('#sync-code').value.trim());
+  await importBackup(AlienBackup.create(null, { code: result.room.code, sessionToken: result.sessionToken }));
+  rememberPrivateCode(result.privateCode);
+  $('#sync-code').value = '';
+  syncMessage('Ya estás en la misma partida, con tu jugador y tu mano. Los avances se sincronizan entre dispositivos.');
 }
 
 function downloadBackup() {
@@ -1317,6 +1378,7 @@ addEventListener('pointermove', e => {
   if (e.pointerType === 'mouse') mousePosition = { x: e.clientX, y: e.clientY };
 });
 addEventListener('keydown', e => {
+  if (syncingDevice) { e.preventDefault(); return; }
   const space = e.code === 'Space' || e.key === ' ';
   if (!$('#card-zoom').hidden) {
     if (space && cardZoom?.holdKey) e.preventDefault();
@@ -1401,6 +1463,7 @@ $('#hand-toggle').onclick = () => { $('#hand').classList.toggle('collapsed'); up
 document.querySelectorAll('.overlay').forEach(overlay => {
   overlay.addEventListener('click', e => {
     if (e.target !== overlay) return;
+    if (overlay.id === 'help' && syncingDevice) return;
     if (overlay.id === 'card-zoom') closeCardZoom();
     else overlay.hidden = true;
   });
@@ -1426,12 +1489,19 @@ $('#btn-reset').onclick = () => {
   focusZone('playmat');
 };
 $('#btn-help').onclick = () => { updateBackupUI(); $('#help').hidden = false; };
-$('#help-close').onclick = () => { $('#help').hidden = true; };
+$('#help-close').onclick = () => { if (!syncingDevice) $('#help').hidden = true; };
+$('#sync-generate').onclick = () => deviceOperation(generatePrivateCode);
+$('#sync-open').onclick = () => deviceOperation(resumePrivateCode);
+$('#sync-code').onkeydown = event => { if (event.key === 'Enter') deviceOperation(resumePrivateCode); };
+$('#sync-copy').onclick = async () => {
+  try { await navigator.clipboard.writeText($('#sync-private-code').value); syncMessage('Código privado copiado. Úsalo solo en tus dispositivos.'); }
+  catch { $('#sync-private-code').focus(); $('#sync-private-code').select(); syncMessage('Selecciona y copia tu código privado.'); }
+};
 $('#backup-download').onclick = downloadBackup;
 $('#backup-open').onclick = () => { $('#backup-file').value = ''; $('#backup-file').click(); };
 let importingBackup = false;
 async function openBackup(read) {
-  if (importingBackup) return;
+  if (importingBackup || syncingDevice) return;
   importingBackup = true;
   $('#backup-open').disabled = true; $('#backup-previous').disabled = true;
   backupMessage('Abriendo copia…');

@@ -157,6 +157,17 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--accent
 #backup-message { color: var(--accent); margin-bottom: 0; }
 #backup-message:empty { display: none; }
 #backup-message.error { color: #f4c8ab; }
+#backup-tools label { display: block; margin: 14px 0 6px; font-weight: 600; }
+#backup-tools input[type="text"], #sync-private-code, #sync-code { width: 100%; min-height: 46px; border: 1px solid var(--line); border-radius: 7px;
+  background: #1b2520; color: var(--text); font: inherit; font-size: 16px; padding: 10px; user-select: text; -webkit-user-select: text; letter-spacing: .04em; }
+#sync-generate, #sync-copy, #sync-open { width: 100%; margin-top: 10px; }
+#sync-generate { background: var(--accent); color: var(--bg); }
+.sync-entry { margin-top: 18px; padding-top: 4px; border-top: 1px solid var(--line); }
+#sync-message { color: var(--accent); }
+#sync-message:empty { display: none; }
+#sync-message.error { color: #f4c8ab; }
+#backup-tools details { margin-top: 18px; }
+#backup-tools summary { cursor: pointer; padding: 8px 0; }
 #btn-reset { margin: 0 16px 16px; flex-shrink: 0; background: transparent; color: #c4b6a7; }
 #drag-ghost { position: fixed; pointer-events: none; z-index: 50; height: 130px; opacity: .85; border-radius: 6px; }
 @keyframes panel-in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }

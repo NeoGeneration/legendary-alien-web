@@ -43,12 +43,13 @@ window.AlienRooms = class {
     } finally { clearTimeout(timeout); }
   }
   start(data, token, name) {
+    // Persist the identity before switching away from the current local game.
+    localStorage.setItem(this.storageKey(data.room.code), JSON.stringify({ token, name }));
+    localStorage.setItem('lea-room-name', name);
     this.stopLive();
     this.callbacks.joining();
     this.code = data.room.code; this.sessionToken = token;
     this.active = true; this.revision = -1;
-    localStorage.setItem(this.storageKey(this.code), JSON.stringify({ token, name }));
-    localStorage.setItem('lea-room-name', name);
     const url = new URL(location.href); url.hash = `room=${this.code}`; history.replaceState(null, '', url);
     this.receive(data); this.schedule(); this.openLive();
     return data;
@@ -61,6 +62,22 @@ window.AlienRooms = class {
     localStorage.removeItem('lea-room-create-token');
     return result;
   }
+  async promote(name, state) {
+    if (this.active) throw new Error('Ya estás en una partida online.');
+    const key = 'lea-room-promote-v1';
+    const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(state)));
+    const fingerprint = Array.from(new Uint8Array(bytes), byte => byte.toString(16).padStart(2, '0')).join('');
+    let pending;
+    try { pending = JSON.parse(localStorage.getItem(key)); } catch {}
+    if (pending?.fingerprint !== fingerprint) pending = { token: this.token(), fingerprint };
+    localStorage.setItem(key, JSON.stringify(pending));
+    const data = await this.request('/rooms/from-solo', pending.token, { name, state });
+    this.start(data, pending.token, name);
+    localStorage.removeItem(key);
+    return data;
+  }
+  continuation() { return this.request(`/rooms/${this.code}/resume-code`, this.sessionToken, {}); }
+  recover(code) { return this.request('/continue', this.token(), { code }); }
   async join(code, name) {
     code = code.trim().toUpperCase().replace(/[\s-]/g, '');
     if (!/^[A-HJ-NP-Z2-9]{8}$/.test(code)) throw new Error('El código de sala tiene 8 letras o números.');
