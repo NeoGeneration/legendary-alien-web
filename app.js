@@ -6,6 +6,7 @@ const CARD_W = 2.25, CARD_H = 3.15; // tamaño carta a scale=1 (unidades TTS)
 const BOARD_H = 10;                 // alto de Custom_Board a scale=1
 const TILE = 1;                     // lado de Custom_Tile a scale=1
 const SAVE_KEY = 'lea-web-state-v1';
+const PRE_IMPORT_KEY = 'lea-web-before-import-v1';
 
 const $ = s => document.querySelector(s);
 const world = $('#world'), viewport = $('#viewport');
@@ -68,6 +69,71 @@ function status(msg) {
   $('#status').textContent = msg;
   clearTimeout(statusTimer);
   statusTimer = setTimeout(() => { $('#status').textContent = ''; }, 3500);
+}
+
+// ---------- Copias y cambio de dispositivo ----------
+function backupMessage(message, error = false) {
+  $('#backup-message').textContent = message;
+  $('#backup-message').classList.toggle('error', error);
+}
+
+function updateBackupUI() {
+  $('#backup-note').textContent = online?.active
+    ? 'Esta copia permite recuperar tu jugador y tu mano en otro dispositivo. Es personal: úsala solo tú. La sala sigue guardada en línea.'
+    : 'Guarda una copia y ábrela en el otro dispositivo. La partida del móvil se conserva; las dos copias individuales evolucionarán por separado.';
+  let previous = false;
+  try { previous = Boolean(localStorage.getItem(PRE_IMPORT_KEY)); } catch {}
+  $('#backup-previous').hidden = !previous;
+  $('#backup-previous').disabled = Boolean(online?.active);
+}
+
+function downloadBackup() {
+  try {
+    const backup = AlienBackup.create(state, online?.active ? online : null);
+    const url = URL.createObjectURL(new Blob([JSON.stringify(backup)], { type: 'application/json' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `alien-${backup.kind === 'room' ? backup.room.code : 'solitario'}-${backup.createdAt.replace(/[:.]/g, '-')}.json`;
+    document.body.appendChild(link); link.click(); link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    backupMessage('Copia preparada para descargar. Envíate el archivo y, en el otro dispositivo, pulsa ? → Abrir copia.');
+  } catch (error) { backupMessage(error.message, true); }
+}
+
+async function importBackup(backup) {
+  // Validate everything before changing either the game or its persistent save.
+  backup = AlienBackup.parse(JSON.stringify(backup));
+  if (online?.active) throw new Error('Primero pulsa Sala → Volver a mi partida individual. La sala quedará guardada.');
+  if (backup.kind === 'room') {
+    const { code, token } = backup.room;
+    const existing = online.saved(code);
+    if (existing && existing.token !== token) throw new Error('Este navegador ya tiene otro jugador en esa sala. Abre la copia en otro perfil del navegador para conservar ambos jugadores.');
+    // Resume an existing player by reading their snapshot; never create a new seat.
+    const data = await online.request(`/rooms/${code}`, token);
+    if (online.active) throw new Error('Ya has entrado en una sala. Sal de ella antes de abrir la copia.');
+    const person = data.room.players.find(player => player.id === data.room.me);
+    if (!person || data.room.code !== code) throw new Error('No se ha podido recuperar tu jugador. Tu partida no se ha cambiado.');
+    // Check storage before start() switches away from the individual game.
+    localStorage.setItem(online.storageKey(code), JSON.stringify({ token, name: person.name }));
+    localStorage.setItem('lea-room-name', person.name);
+    online.start(data, token, person.name);
+    updateRoomUI(); focusZone('playmat');
+    $('#room-dialog').hidden = true;
+    $('#help').hidden = false;
+    backupMessage(`Sala recuperada: sigues siendo ${person.name}, Jugador ${data.room.seat}, con tu misma mano.`);
+  } else {
+    const previous = JSON.stringify(AlienBackup.create(state));
+    const restored = JSON.stringify(backup.state);
+    try {
+      localStorage.setItem(PRE_IMPORT_KEY, previous);
+      localStorage.setItem(SAVE_KEY, restored);
+    } catch { throw new Error('No hay espacio para guardar la copia y conservar tu partida anterior. Tu partida actual sigue intacta.'); }
+    pushUndo(); cancelHandGesture?.(); cancelPlacement(); clearDrag(); closeInspector(); closeModal(); closeCardZoom();
+    state = backup.state;
+    renderAll(); focusZone('playmat');
+    backupMessage('Copia abierta. La partida anterior de este navegador se conserva en «Recuperar partida anterior».');
+  }
+  updateBackupUI();
 }
 
 // ---------- Salas ----------
@@ -1359,8 +1425,27 @@ $('#btn-reset').onclick = () => {
   renderAll();
   focusZone('playmat');
 };
-$('#btn-help').onclick = () => { $('#help').hidden = false; };
+$('#btn-help').onclick = () => { updateBackupUI(); $('#help').hidden = false; };
 $('#help-close').onclick = () => { $('#help').hidden = true; };
+$('#backup-download').onclick = downloadBackup;
+$('#backup-open').onclick = () => { $('#backup-file').value = ''; $('#backup-file').click(); };
+let importingBackup = false;
+async function openBackup(read) {
+  if (importingBackup) return;
+  importingBackup = true;
+  $('#backup-open').disabled = true; $('#backup-previous').disabled = true;
+  backupMessage('Abriendo copia…');
+  try { await importBackup(AlienBackup.parse(await read())); }
+  catch (error) { backupMessage(error.message, true); }
+  finally { importingBackup = false; $('#backup-open').disabled = false; updateBackupUI(); }
+}
+$('#backup-file').onchange = () => {
+  const file = $('#backup-file').files[0];
+  if (!file) return;
+  if (file.size > AlienBackup.maxBytes) { backupMessage('La copia es demasiado grande. Tu partida no se ha cambiado.', true); return; }
+  openBackup(() => file.text());
+};
+$('#backup-previous').onclick = () => openBackup(() => localStorage.getItem(PRE_IMPORT_KEY));
 $('#modal-close').onclick = closeModal;
 
 AlienSetup.scenarios.forEach(scenario => {

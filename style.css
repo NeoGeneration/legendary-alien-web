@@ -146,8 +146,17 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--accent
 #inspector[data-resource] #inspector-actions button:first-child { background: var(--counter-accent); border-color: var(--counter-accent); color: #101817; }
 #inspector[data-resource] #inspector-actions button:last-child { border-color: var(--counter-accent); color: var(--counter-accent); background: var(--counter-bg); }
 #help .modal-box { max-width: 650px; }
-#help ul { padding: 12px 32px; margin: 0; overflow-y: auto; }
+#help .help-content { overflow-y: auto; min-height: 0; }
+#help ul { padding: 12px 32px; margin: 0; }
 #help li { margin: 10px 0; }
+#backup-tools { padding: 16px; border-bottom: 1px solid var(--line); }
+#backup-title { margin: 0; font-size: 18px; color: var(--accent); }
+#backup-note { color: #acb9b0; }
+.backup-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+.backup-buttons button { flex: 1 1 160px; }
+#backup-message { color: var(--accent); margin-bottom: 0; }
+#backup-message:empty { display: none; }
+#backup-message.error { color: #f4c8ab; }
 #btn-reset { margin: 0 16px 16px; flex-shrink: 0; background: transparent; color: #c4b6a7; }
 #drag-ghost { position: fixed; pointer-events: none; z-index: 50; height: 130px; opacity: .85; border-radius: 6px; }
 @keyframes panel-in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }

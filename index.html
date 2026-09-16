@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0b0f0e">
 <title>Legendary Encounters: Alien — Mesa</title>
-<link rel="stylesheet" href="style.css?v=14">
+<link rel="stylesheet" href="style.css?v=15">
 </head>
 <body class="access-locked">
 <main id="app-access">
@@ -118,6 +118,18 @@
 <div id="help" class="overlay" hidden role="dialog" aria-modal="true" aria-labelledby="help-title">
   <div class="modal-box">
     <div class="modal-head"><span id="help-title">Cómo usar la mesa</span><button id="help-close">Cerrar</button></div>
+    <div class="help-content">
+    <section id="backup-tools" aria-labelledby="backup-title">
+      <h2 id="backup-title">Continuar en otro dispositivo</h2>
+      <p id="backup-note"></p>
+      <div class="backup-buttons">
+        <button id="backup-download">Guardar copia</button>
+        <button id="backup-open">Abrir copia</button>
+        <button id="backup-previous" hidden>Recuperar partida anterior</button>
+      </div>
+      <input id="backup-file" type="file" accept=".json,application/json" hidden>
+      <p id="backup-message" role="status" aria-live="polite"></p>
+    </section>
     <ul>
       <li><b>Un clic o toque</b> en un mazo: selecciona solo la carta superior. <b>Doble clic o doble toque</b>: selecciona el mazo entero. Después toca el destino.</li>
       <li><b>Acciones:</b> selecciona una carta o mazo y pulsa «Acciones» para ampliar, voltear, barajar o robar. Las cartas boca abajo siguen ocultas.</li>
@@ -138,12 +150,14 @@
     </ul>
     <button id="btn-reset">Reiniciar mesa</button>
     <button id="btn-lock">Bloquear app</button>
+    </div>
   </div>
 </div>
 <script src="setup.js?v=7"></script>
 <script src="multiplayer-config.js?v=1"></script>
 <script src="access.js?v=1"></script>
   <script src="multiplayer.js?v=6"></script>
-<script src="app.js?v=15"></script>
+<script src="backup.js?v=1"></script>
+<script src="app.js?v=16"></script>
 </body>
 </html>
