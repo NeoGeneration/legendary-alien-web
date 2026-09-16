@@ -1543,7 +1543,7 @@ $('#modal-close').onclick = closeModal;
 
 // ---------- Selector de juego y acciones de X-Files ----------
 $('#btn-games').onclick = () => {
-  for (const link of document.querySelectorAll('[data-game]')) {
+  for (const link of document.querySelectorAll('#games-dialog a[data-game]')) {
     const url = new URL(location.href); url.searchParams.set('game', link.dataset.game); url.hash = '';
     try { const code = localStorage.getItem(`lea-last-room-v1:${link.dataset.game}`); if (code) url.hash = `room=${code}`; } catch {}
     link.href = url.href;
@@ -1552,7 +1552,7 @@ $('#btn-games').onclick = () => {
   $('#games-dialog').hidden = false;
 };
 $('#games-close').onclick = () => { $('#games-dialog').hidden = true; };
-for (const link of document.querySelectorAll('[data-game]')) link.onclick = async e => {
+for (const link of document.querySelectorAll('#games-dialog a[data-game]')) link.onclick = async e => {
   e.preventDefault();
   await online?.queue;
   save(); location.assign(link.href);
