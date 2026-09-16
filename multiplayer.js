@@ -50,6 +50,7 @@ window.AlienRooms = class {
     this.callbacks.joining();
     this.code = data.room.code; this.sessionToken = token;
     this.active = true; this.revision = -1;
+    this.snapshotState = null;
     const url = new URL(location.href); url.hash = `room=${this.code}`; history.replaceState(null, '', url);
     this.receive(data); this.schedule(); this.openLive();
     return data;
@@ -92,9 +93,17 @@ window.AlienRooms = class {
   }
   receive(data) {
     if (!this.active || data.room.code !== this.code || data.room.revision < this.revision) return;
+    if (data.delta && data.room.revision > this.revision) {
+      if (!this.snapshotState || data.delta.since > this.revision) { this.poll(true); return; }
+      const objects = new Map(this.snapshotState.objects.map(object => [object.id, object]));
+      for (const object of data.state.objects) objects.set(object.id, object);
+      if (data.delta.ids.some(id => !objects.has(id))) { this.poll(true); return; }
+      data = { ...data, state: { ...data.state, objects: data.delta.ids.map(id => objects.get(id)) } };
+    }
     // Notifications and action responses can deliver the same state in either order.
     // Still accept player presence updates without rendering that state twice.
     if (data.room.revision === this.revision && data.state) data = { room: data.room };
+    if (data.state) this.snapshotState = data.state;
     this.revision = data.room.revision;
     this.room = data.room;
     this.connection(true);
@@ -114,6 +123,7 @@ window.AlienRooms = class {
     this.waiter?.abort(); this.waiter = null;
     this.socket = null; this.live = false; this.opening = false;
     this.polling = false; this.refreshAgain = false; this.retryCount = 0;
+    this.fullRefresh = false;
     socket?.close();
   }
   retryLive(generation) {
@@ -242,13 +252,16 @@ window.AlienRooms = class {
     } catch { end(); }
     finally { clearTimeout(timeout); }
   }
-  async poll() {
+  async poll(full = false) {
     if (!this.active) return;
+    if (full) this.fullRefresh = true;
     if (this.polling) { this.refreshAgain = true; return; }
     this.polling = true;
     const code = this.code, generation = this.generation;
+    const since = this.fullRefresh ? -1 : this.revision;
+    this.fullRefresh = false;
     try {
-      const data = await this.request(`/rooms/${code}?since=${this.revision}`, this.sessionToken);
+      const data = await this.request(`/rooms/${code}?since=${since}&delta=1`, this.sessionToken);
       if (this.active && generation === this.generation) this.receive(data);
     } catch (error) {
       if (this.active && generation === this.generation) {
@@ -270,7 +283,7 @@ window.AlienRooms = class {
       if (!this.connected) throw new Error('Sin conexión. Espera a que la sala se reconecte.');
       let data;
       for (let attempt = 0; attempt < 2; attempt++) {
-        try { data = await this.request(`/rooms/${code}/action`, this.sessionToken, body); break; }
+        try { data = await this.request(`/rooms/${code}/action`, this.sessionToken, { ...body, since: this.revision, delta: true }); break; }
         catch (error) {
           if (error.status) { await this.poll(); throw error; }
           if (attempt === 1) { this.connection(false); throw new Error('Conexión interrumpida. La mesa se recuperará al reconectar.'); }
