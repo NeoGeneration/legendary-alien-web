@@ -71,6 +71,9 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--accent
 .board, .tile, .playmat { background-size: 100% 100%; pointer-events: none; }
 .player-zone { background-size: 100% 100%; border-radius: 4%; cursor: grab; }
 .player-zone.drop { outline: 3px solid var(--accent); outline-offset: 3px; }
+.labeled-zone { border: 2px solid #637582; background: #18263088; display: flex; align-items: center; justify-content: center; color: #b8cbd8; font-size: 13px; text-align: center; }
+.labeled-zone[data-zone="play"] { align-items: flex-start; border-style: dashed; }
+.labeled-zone[data-zone="play"] span { margin-top: -24px; white-space: nowrap; }
 .playmat { border-radius: 1.6%; box-shadow: 0 8px 28px #0008; }
 .text3d { color: #fff; white-space: pre; text-align: center; pointer-events: none; font-weight: 600; text-shadow: 0 0 4px #000; }
 .stack { cursor: pointer; border-radius: 5%; background-size: 100% 100%; background-color: #222; box-shadow: 0 1px 3px #000a; }
@@ -244,3 +247,32 @@ button:disabled { opacity: .5; cursor: wait; }
 #setup-error { color: #f4c8ab; }
 #setup-submit { width: 100%; margin-top: 10px; min-height: 48px; }
 @media (hover: none) { #preview { display: none !important; } }
+
+/* Shared game selector and X-Files controls. */
+html[data-game="xfiles"] { --accent: #a7d6e7; --surface: #111a20; --line: #304451; }
+#game-name { font-weight: inherit; }
+.game-list, .turn-content { padding: 20px; overflow-y: auto; }
+#games-dialog .modal-box, #turn-dialog .modal-box { max-width: 540px; }
+.game-list > p, #turn-summary { margin: 0 0 18px; color: #b8c6c0; line-height: 1.5; }
+.game-list a { display: flex; flex-direction: column; gap: 8px; color: var(--text); text-decoration: none; padding: 20px 0; border-top: 1px solid var(--line); min-height: 88px; }
+.game-list a strong { font-size: 25px; letter-spacing: .14em; color: var(--accent); }
+.game-list a span { color: #b8c6c0; font-size: 13px; }
+.game-list a[aria-current="page"]::after { content: 'Juego actual'; font-size: 12px; color: var(--accent); }
+.game-list a:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+#turn-actions { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 10px; }
+#turn-actions button { min-height: 52px; }
+#turn-feedback { min-height: 24px; color: var(--accent); line-height: 1.5; }
+#turn-feedback.error { color: #ffb1a3; }
+.bureau-refill { margin-top: 20px; }
+.bureau-refill button { margin: 0 8px 8px 0; min-width: 44px; }
+#xfiles-setup { grid-column: 1 / -1; width: 100%; }
+#xfiles-setup fieldset { margin: 16px 0; padding: 14px; border: 1px solid var(--line); }
+#xfiles-setup legend { padding: 0 6px; font-size: 14px; }
+#xf-heroes { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 4px 12px; margin-bottom: 12px; }
+#xf-heroes label { display: flex; gap: 9px; align-items: center; min-height: 44px; font-size: 13px; }
+#xf-heroes input { width: 20px; height: 20px; flex-shrink: 0; accent-color: var(--accent); }
+#xf-avatars label, #xfiles-seasons label { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin: 8px 0; }
+#xf-avatars select, #xfiles-seasons select { max-width: 65%; }
+#xfiles-help { margin-bottom: 24px; }
+#xfiles-help a { color: var(--accent); }
+@media (max-width: 380px) { #xf-heroes { grid-template-columns: 1fr; } #turn-actions { gap: 8px; } }

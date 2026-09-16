@@ -9,6 +9,7 @@ window.AlienRooms = class {
     this.revision = -1;
     this.queue = Promise.resolve();
     this.generation = 0;
+    this.gameId = window.AlienGame?.id || 'alien';
     const resume = () => {
       if (!this.active) return;
       if (this.live && Date.now() - this.lastMessage > 45000) { this.socket?.close(); this.stream?.abort(); this.waiter?.abort(); }
@@ -43,6 +44,7 @@ window.AlienRooms = class {
     } finally { clearTimeout(timeout); }
   }
   start(data, token, name) {
+    if ((data.room.gameId || data.state?.gameId || 'alien') !== this.gameId) throw new Error('Esta partida es de otro juego. Selecciónalo desde Juegos y abre allí el enlace o código.');
     // Persist the identity before switching away from the current local game.
     localStorage.setItem(this.storageKey(data.room.code), JSON.stringify({ token, name }));
     localStorage.setItem('lea-room-name', name);
@@ -53,14 +55,16 @@ window.AlienRooms = class {
     this.snapshotState = null;
     const url = new URL(location.href); url.hash = `room=${this.code}`; history.replaceState(null, '', url);
     this.receive(data); this.schedule(); this.openLive();
+    try { localStorage.setItem(`lea-last-room-v1:${this.gameId}`, this.code); } catch {}
     return data;
   }
   async create(name) {
-    let token = localStorage.getItem('lea-room-create-token');
-    if (!token) { token = this.token(); localStorage.setItem('lea-room-create-token', token); }
-    const data = await this.request('/rooms', token, { name });
+    const key = 'lea-room-create-token' + (this.gameId === 'alien' ? '' : ':' + this.gameId);
+    let token = localStorage.getItem(key);
+    if (!token) { token = this.token(); localStorage.setItem(key, token); }
+    const data = await this.request('/rooms', token, { name, gameId: this.gameId });
     const result = this.start(data, token, name);
-    localStorage.removeItem('lea-room-create-token');
+    localStorage.removeItem(key);
     return result;
   }
   async promote(name, state) {
@@ -85,7 +89,7 @@ window.AlienRooms = class {
     const saved = this.saved(code), token = saved?.token || this.token();
     // Persist before joining, so a lost response cannot create a second seat.
     localStorage.setItem(this.storageKey(code), JSON.stringify({ token, name }));
-    const data = await this.request(`/rooms/${code}/join`, token, { name });
+    const data = await this.request(`/rooms/${code}/join`, token, { name, gameId: this.gameId });
     return this.start(data, token, name);
   }
   connection(connected) {
@@ -300,6 +304,7 @@ window.AlienRooms = class {
     this.stopLive();
     const code = this.code, token = this.sessionToken;
     this.active = false; this.connected = false; this.room = null; this.revision = -1;
+    try { localStorage.removeItem(`lea-last-room-v1:${this.gameId}`); } catch {}
     this.request(`/rooms/${code}/disconnect`, token, {}).catch(() => {});
     const url = new URL(location.href); url.hash = ''; history.replaceState(null, '', url);
   }

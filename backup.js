@@ -5,16 +5,17 @@ const AlienBackup = (() => {
   const maxBytes = 5 * 1024 * 1024;
   const types = new Set(['stack', 'playmat', 'board', 'tile', 'player-zone', 'text', 'token', 'bag', 'counter']);
   const image = value => typeof value === 'string'
-    && /^(cards|assets)\/[\w/.-]+\.(png|jpe?g|webp)$/i.test(value) && !value.split('/').includes('..');
+    && /^(?:xfiles\/)?(cards|assets)\/[\w/.-]+\.(png|jpe?g|webp)$/i.test(value) && !value.split('/').includes('..');
   const card = value => value && image(value.face) && image(value.back);
   const finite = (object, keys) => keys.every(key => Number.isFinite(object[key]));
   function validate(backup) {
-    const invalid = () => { throw new Error('El archivo no es una copia válida de Legendary Alien. Tu partida no se ha cambiado.'); };
+    const invalid = () => { throw new Error('El archivo no es una copia válida de Legendary Encounters. Tu partida no se ha cambiado.'); };
     if (!backup || backup.format !== format || backup.version !== 1) invalid();
     if (backup.kind === 'room') {
       if (!/^[A-HJ-NP-Z2-9]{8}$/.test(backup.room?.code || '') || !/^[a-f0-9]{64}$/.test(backup.room?.token || '')) invalid();
     } else if (backup.kind === 'solo') {
       const game = backup.state;
+      if (game?.gameId && !['alien', 'xfiles'].includes(game.gameId)) invalid();
       if (!game || game.schemaVersion !== 4 || !Array.isArray(game.objects) || game.objects.length > 1600
         || !Array.isArray(game.hand) || game.hand.length > 10000 || !game.hand.every(card)
         || !Number.isSafeInteger(game.nextId) || game.nextId < 1) invalid();
@@ -24,7 +25,8 @@ const AlienBackup = (() => {
           || ids.has(object.id) || object.id >= game.nextId || !finite(object, ['x', 'z', 'rot', 'scale']) || object.scale <= 0) invalid();
         ids.add(object.id);
         if (object.type === 'stack' && (!Array.isArray(object.cards) || !object.cards.length || object.cards.length > 10000 || !object.cards.every(card))) invalid();
-        if (['board', 'tile', 'playmat', 'player-zone'].includes(object.type) && !image(object.img)) invalid();
+        if (['board', 'tile', 'playmat', 'player-zone'].includes(object.type) && !image(object.img)
+          && !(object.type === 'player-zone' && object.labelOnly === true && typeof object.name === 'string')) invalid();
         if (object.type === 'playmat' && (!finite(object, ['width', 'height']) || object.width <= 0 || object.height <= 0)) invalid();
         if (object.type === 'board' && (!Number.isFinite(object.widthScale) || object.widthScale <= 0)) invalid();
         if (object.textureBounds && (!Array.isArray(object.textureBounds) || object.textureBounds.length !== 4 || !object.textureBounds.every(Number.isFinite))) invalid();

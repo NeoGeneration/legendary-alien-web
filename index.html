@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0b0f0e">
 <title>Legendary Encounters: Alien — Mesa</title>
-<link rel="stylesheet" href="style.css?v=16">
+<link rel="stylesheet" href="style.css?v=17">
 </head>
 <body class="access-locked">
 <main id="app-access">
@@ -21,13 +21,15 @@
   </form>
 </main>
 <header id="toolbar">
-  <strong><span>LEGENDARY ENCOUNTERS</span>ALIEN</strong>
+  <strong><span>LEGENDARY ENCOUNTERS</span><b id="game-name">ALIEN</b></strong>
   <button id="btn-setup">Preparar</button>
   <button id="btn-room" title="Jugar multijugador" aria-label="Sala multijugador">Sala</button>
   <button id="btn-undo" title="Deshacer (Ctrl+Z)" aria-label="Deshacer">↶</button>
   <button id="btn-help" aria-label="Ayuda y opciones">?</button>
 </header>
 <nav id="zones" aria-label="Zonas de la mesa">
+  <button id="btn-games">Juegos</button>
+  <button id="btn-turn" hidden>Turno</button>
   <button data-zone="playmat" aria-pressed="true">Tapete</button>
   <button data-zone="complex" aria-pressed="false">Complejo</button>
   <button data-zone="hq" aria-pressed="false">HQ</button>
@@ -94,9 +96,18 @@
         <option value="1">1 jugador</option><option value="2" selected>2 jugadores</option>
         <option value="3">3 jugadores</option><option value="4">4 jugadores</option><option value="5">5 jugadores</option>
       </select>
-      <label class="setup-check"><input id="setup-drones" type="checkbox" checked> Incluir drones de la expansión</label>
+      <label id="setup-drones-label" class="setup-check"><input id="setup-drones" type="checkbox" checked> Incluir drones de la expansión</label>
+      <div id="xfiles-setup" hidden>
+        <div id="xfiles-seasons" hidden>
+          <label>Primera etapa <select id="xf-season-1"><option value="1">Temporada 1</option><option value="4">Temporada 4</option><option value="7">Temporada 7</option></select></label>
+          <label>Segunda etapa <select id="xf-season-2"><option value="2">Temporada 2</option><option value="5">Temporada 5</option><option value="8">Temporada 8</option></select></label>
+          <label>Tercera etapa <select id="xf-season-3"><option value="3">Temporada 3</option><option value="6">Temporada 6</option><option value="9">Temporada 9</option></select></label>
+        </div>
+        <fieldset><legend>Academia · Elige 4 personajes</legend><div id="xf-heroes"></div><button id="xf-random-heroes" type="button">Elegir cuatro al azar</button></fieldset>
+        <fieldset><legend>Agentes de los jugadores</legend><div id="xf-avatars"></div></fieldset>
+      </div>
       <p id="setup-summary"></p>
-      <p class="setup-note">Prepara localización, objetivos, cuartel, 5 cartas en HQ y colmena. Después elige avatar y roba tu mano inicial.</p>
+      <p id="setup-description" class="setup-note">Prepara localización, objetivos, cuartel, 5 cartas en HQ y colmena. Después elige avatar y roba tu mano inicial.</p>
       <p class="setup-note">Sustituye la mesa actual. Puedes recuperarla con Deshacer.</p>
       <p id="setup-error" role="alert" hidden></p>
     </div>
@@ -119,6 +130,12 @@
   <div class="modal-box">
     <div class="modal-head"><span id="help-title">Cómo usar la mesa</span><button id="help-close">Cerrar</button></div>
     <div class="help-content">
+    <section id="xfiles-help" hidden>
+      <h2>X-Files</h2>
+      <p>Prepara las temporadas y los agentes desde Preparar. Usa Turno para robar, jugar tu mano, terminar el turno y avanzar la conspiración. Al robar se baraja el descarte si se agota tu mazo.</p>
+      <p>En el Bureau, abre las acciones de una carta para escanearla o reclutarla y reponer su espacio. Los costes, las decisiones y los efectos de las cartas se resuelven manualmente. Creencia y Duda son cartas de sus reservas.</p>
+      <p><a href="xfiles/assets/rules.pdf" target="_blank" rel="noopener">Reglamento original en inglés</a></p>
+    </section>
     <section id="backup-tools" aria-labelledby="backup-title">
       <h2 id="backup-title">Continuar en otro dispositivo</h2>
       <p>Genera un código privado para guardar esta partida online y continuarla en el móvil o el ordenador. Tu copia individual se conserva.</p>
@@ -170,11 +187,34 @@
     </div>
   </div>
 </div>
+<div id="games-dialog" class="overlay" hidden role="dialog" aria-modal="true" aria-labelledby="games-title">
+  <div class="modal-box"><div class="modal-head"><span id="games-title">Tus juegos</span><button id="games-close">Cerrar</button></div>
+    <div class="game-list"><p>Cada juego conserva su partida individual. Las salas también se guardan por separado.</p>
+      <a data-game="alien" href="?game=alien"><strong>ALIEN</strong><span>Escenarios y expansiones</span></a>
+      <a data-game="xfiles" href="?game=xfiles"><strong>X-FILES</strong><span>Temporadas 1–9 · Solo y con amigos</span></a>
+    </div>
+  </div>
+</div>
+<div id="turn-dialog" class="overlay" hidden role="dialog" aria-modal="true" aria-labelledby="turn-title">
+  <div class="modal-box"><div class="modal-head"><span id="turn-title">Turno</span><button id="turn-close">Cerrar</button></div>
+    <div class="turn-content"><p id="turn-summary"></p><div id="turn-actions">
+      <button data-xf-command="draw" data-count="1">Robar 1</button><button data-xf-command="draw" data-count="6">Robar 6</button>
+      <button data-xf-command="playHand">Jugar mi mano</button><button data-xf-command="endTurn">Terminar mi turno</button>
+      <button data-xf-command="conspiracy">Avanzar conspiración</button>
+      <button data-xf-command="gain" data-resource="strike">Recibir herida</button>
+      <button data-xf-command="gain" data-resource="belief">Ganar Creencia</button><button data-xf-command="gain" data-resource="doubt">Ganar Duda</button>
+      <button data-xf-command="gain" data-resource="agent">Reclutar agente especial</button>
+    </div><p class="setup-note">Resuelve los costes y los efectos de las cartas. Terminar turno descarta tu mano y las cartas de tu zona de juego, roba seis y pone combate y estrellas a cero.</p>
+    <p id="turn-feedback" role="status" aria-live="polite"></p></div>
+  </div>
+</div>
 <script src="setup.js?v=7"></script>
+<script src="xfiles/setup.js?v=1"></script>
+<script src="game-config.js?v=1"></script>
 <script src="multiplayer-config.js?v=1"></script>
 <script src="access.js?v=1"></script>
-<script src="multiplayer.js?v=8"></script>
-<script src="backup.js?v=1"></script>
-<script src="app.js?v=17"></script>
+<script src="multiplayer.js?v=9"></script>
+<script src="backup.js?v=2"></script>
+<script src="app.js?v=18"></script>
 </body>
 </html>

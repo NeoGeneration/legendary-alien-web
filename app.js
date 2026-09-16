@@ -5,8 +5,11 @@ const UNIT = 30;
 const CARD_W = 2.25, CARD_H = 3.15; // tamaño carta a scale=1 (unidades TTS)
 const BOARD_H = 10;                 // alto de Custom_Board a scale=1
 const TILE = 1;                     // lado de Custom_Tile a scale=1
-const SAVE_KEY = 'lea-web-state-v1';
-const PRE_IMPORT_KEY = 'lea-web-before-import-v1';
+const GAME = window.AlienGame || { id: 'alien', title: 'ALIEN', data: 'data.json?v=7', saveKey: 'lea-web-state-v1', previousKey: 'lea-web-before-import-v1' };
+const IS_XFILES = GAME.id === 'xfiles';
+const GameSetup = IS_XFILES ? XFilesSetup : AlienSetup;
+const SAVE_KEY = GAME.saveKey;
+const PRE_IMPORT_KEY = GAME.previousKey;
 
 const $ = s => document.querySelector(s);
 const world = $('#world'), viewport = $('#viewport');
@@ -154,7 +157,7 @@ function downloadBackup() {
     const url = URL.createObjectURL(new Blob([JSON.stringify(backup)], { type: 'application/json' }));
     const link = document.createElement('a');
     link.href = url;
-    link.download = `alien-${backup.kind === 'room' ? backup.room.code : 'solitario'}-${backup.createdAt.replace(/[:.]/g, '-')}.json`;
+    link.download = `${GAME.id}-${backup.kind === 'room' ? backup.room.code : 'solitario'}-${backup.createdAt.replace(/[:.]/g, '-')}.json`;
     document.body.appendChild(link); link.click(); link.remove();
     setTimeout(() => URL.revokeObjectURL(url), 60000);
     backupMessage('Copia preparada para descargar. Envíate el archivo y, en el otro dispositivo, pulsa ? → Abrir copia.');
@@ -164,6 +167,7 @@ function downloadBackup() {
 async function importBackup(backup) {
   // Validate everything before changing either the game or its persistent save.
   backup = AlienBackup.parse(JSON.stringify(backup));
+  if (backup.kind === 'solo' && (backup.state.gameId || 'alien') !== GAME.id) throw new Error('Esta copia es de otro juego. Selecciónalo desde Juegos para abrirla; tus partidas se conservan.');
   if (online?.active) throw new Error('Primero pulsa Sala → Volver a mi partida individual. La sala quedará guardada.');
   if (backup.kind === 'room') {
     const { code, token } = backup.room;
@@ -204,6 +208,7 @@ function roomError(message) {
 }
 
 function updateRoomUI() {
+  updateTurnUI();
   const room = online?.active && online.room;
   $('#room-entry').hidden = Boolean(room);
   $('#room-current').hidden = !room;
@@ -257,6 +262,7 @@ function applyRemote(data) {
   if (keepInspector) refreshStackInspector(inspected);
   else if (inspectorChanged) closeInspector();
   $('#menu').hidden = true;
+  updateTurnUI();
 }
 
 function flushRemote() {
@@ -350,10 +356,11 @@ function initializeRooms() {
 
 // ---------- Carga ----------
 async function load() {
-  const data = await fetch('data.json?v=7').then(r => {
+  const data = await fetch(GAME.data).then(r => {
     if (!r.ok) throw new Error('No se han podido cargar las cartas.');
     return r.json();
   });
+  GameSetup.configure?.(data);
   initial = data.objects.map((o, i) => ({ ...o, id: i + 1, z_: i }));
   let saved = null;
   try { saved = JSON.parse(localStorage.getItem(SAVE_KEY)); } catch (e) { /* ignorar */ }
@@ -376,7 +383,7 @@ async function load() {
 }
 
 function freshState() {
-  return { objects: clone(initial), hand: [], nextId: initial.length + 1, schemaVersion: 4 };
+  return { gameId: GAME.id, objects: clone(initial), hand: [], nextId: initial.length + 1, schemaVersion: 4 };
 }
 
 function migratePlayerZones() {
@@ -431,13 +438,14 @@ function renderAll() {
     .sort((a, b) => (order[a.type] - order[b.type]) || (a.z_ || 0) - (b.z_ || 0))
     .forEach(o => { renderObj(o); });
   renderHand();
+  updateTurnUI();
   save();
 }
 
 function sizeOf(o) {
   switch (o.type) {
     case 'playmat': return { w: o.width, h: o.height };
-    case 'stack': case 'player-zone': return { w: CARD_W * o.scale, h: CARD_H * o.scale };
+    case 'stack': case 'player-zone': return { w: o.width || CARD_W * o.scale, h: o.height || CARD_H * o.scale };
     case 'board': return { w: BOARD_H * o.scale * o.widthScale, h: BOARD_H * o.scale };
     case 'tile': return { w: TILE * o.scale * 2.14, h: TILE * o.scale };
     case 'token': case 'bag': return { w: 2, h: 2 };
@@ -479,9 +487,13 @@ function renderObj(o) {
       el.appendChild(c);
     }
   } else if (o.type === 'board' || o.type === 'tile' || o.type === 'playmat' || o.type === 'player-zone') {
-    el.style.backgroundImage = `url("${o.img}")`;
+    el.style.backgroundImage = o.img ? `url("${o.img}")` : '';
     el.style.transform = `rotate(${o.rot - 180}deg)`;
     if (o.type === 'player-zone') {
+      if (o.labelOnly) {
+        el.classList.add('labeled-zone'); el.dataset.zone = o.zone;
+        const label = document.createElement('span'); label.textContent = o.name; el.appendChild(label);
+      }
       el.setAttribute('role', 'img');
       el.setAttribute('aria-label', `Zona de jugador: ${o.name}`);
       el.title = `${o.name} · Coloca tus cartas aquí`;
@@ -492,7 +504,7 @@ function renderObj(o) {
       el.style.backgroundSize = `${100 / w}% ${100 / h}%`;
       el.style.backgroundPosition = `${100 * x1 / (1 - w)}% ${100 * y1 / (1 - h)}%`;
       el.setAttribute('role', 'img');
-      el.setAttribute('aria-label', 'Tapete original de Legendary Encounters: Alien');
+      el.setAttribute('aria-label', 'Tapete original de Legendary Encounters: ' + GAME.title);
     }
   } else if (o.type === 'text') {
     el.className = 'obj text3d';
@@ -571,6 +583,16 @@ function focusZone(zone) {
   activeZone = zone;
   document.querySelectorAll('[data-zone]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.zone === zone)));
   const mat = state.objects.find(o => o.type === 'playmat');
+  if (IS_XFILES && zone !== 'playmat' && zone !== 'all') {
+    if (zone === 'complex') fitBounds(-7, 13, 10, 16.5);
+    else if (zone === 'hq') fitBounds(-12, 18, -2, 4);
+    else if (zone === 'reserve') fitBounds(-44, 44, 19, 34);
+    else if (zone === 'player') {
+      const area = GameSetup.seatZone(state, online?.room?.seat || 1, 'play');
+      if (area) fitBounds(area.x-8.8, area.x+8.8, -26, -6);
+    }
+    return;
+  }
   if (zone === 'playmat' && mat) fitBounds(mat.x - mat.width / 2, mat.x + mat.width / 2, mat.z - mat.height / 2, mat.z + mat.height / 2);
   else if (zone === 'complex') fitBounds(-17, 5, 4.5, 13);
   else if (zone === 'hq') fitBounds(-22, 11, -8, 0);
@@ -910,6 +932,7 @@ function inspectObject(o) {
     inspect(`${o.name || (count > 1 ? 'Mazo' : 'Carta')} · ${count} ${count === 1 ? 'carta' : 'cartas'}`,
       o.faceUp ? o.cards[0].face : o.cards[0].back, [
         ['Ampliar', () => { const latest = current(); if (latest) openCardZoom(latest.cards[0], latest.faceUp, latest.rot - 180); }],
+        ...xfilesCardActions(o),
         ['Robar 1', () => drawToHand(current(), 1), true, 'draw-feedback'],
         ...(count > 1 ? [['Robar 6', () => drawToHand(current(), 6)]] : []),
         ['Voltear', async () => { await flip(current()); inspectObject(current()); }],
@@ -1009,7 +1032,7 @@ function placeAt(p) {
     if (i < 0) { cancelPlacement(); return; }
     pushUndo();
     const [card] = state.hand.splice(i, 1);
-    o = addStack([card], p.x, p.z, true, 1.47, 180);
+    o = addStack([card], p.x, p.z, true, IS_XFILES ? 1.12 : 1.47, 180);
   } else {
     o = byId(placement.id);
     if (!o) { cancelPlacement(); return; }
@@ -1081,7 +1104,7 @@ function findDropTarget(o) {
 function findPlayerZone(o) {
   if (o.type !== 'stack') return null;
   return state.objects.find(zone => {
-    if (zone.type !== 'player-zone') return false;
+    if (zone.type !== 'player-zone' || zone.zone === 'play') return false;
     const { w, h } = sizeOf(zone), angle = (zone.rot - 180) * Math.PI / 180;
     const dx = o.x - zone.x, dy = zone.z - o.z;
     const x = dx * Math.cos(angle) + dy * Math.sin(angle);
@@ -1330,7 +1353,7 @@ function startHandDrag(e, i) {
     ghost.style.top = ev.clientY - offsetY + 'px';
     clearDrop();
     if (onTable(ev)) {
-      const target = { type: 'stack', scale: 1.47, ...screenToWorld(ev.clientX, ev.clientY) };
+      const target = { type: 'stack', scale: IS_XFILES ? 1.12 : 1.47, ...screenToWorld(ev.clientX, ev.clientY) };
       const zone = findPlayerZone(target);
       if (zone) Object.assign(target, { x: zone.x, z: zone.z });
       const drop = findDropTarget(target) || zone;
@@ -1386,8 +1409,8 @@ addEventListener('keydown', e => {
     return;
   }
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); undo(); return; }
-  if (e.key === 'Escape') { cancelHandGesture?.(); closeModal(); closeInspector(); cancelPlacement(); $('#help').hidden = true; $('#setup').hidden = true; $('#room-dialog').hidden = true; $('#menu').hidden = true; return; }
-  if (!$('#inspector').hidden || !$('#modal').hidden || !$('#help').hidden || !$('#setup').hidden || !$('#room-dialog').hidden) return;
+  if (e.key === 'Escape') { cancelHandGesture?.(); closeModal(); closeInspector(); cancelPlacement(); $('#help').hidden = true; $('#setup').hidden = true; $('#room-dialog').hidden = true; $('#games-dialog').hidden = true; $('#turn-dialog').hidden = true; $('#menu').hidden = true; return; }
+  if (!$('#inspector').hidden || !$('#modal').hidden || !$('#help').hidden || !$('#setup').hidden || !$('#room-dialog').hidden || !$('#games-dialog').hidden || !$('#turn-dialog').hidden) return;
   if (e.target.closest?.('input, textarea, select, [contenteditable="true"]')) return;
   if (space) {
     if (e.repeat || e.ctrlKey || e.metaKey || e.altKey || drag || pinch || suppressHandClick) return;
@@ -1469,7 +1492,7 @@ document.querySelectorAll('.overlay').forEach(overlay => {
   });
   overlay.addEventListener('keydown', e => {
     if (e.key !== 'Tab') return;
-    const buttons = [...overlay.querySelectorAll('button, select, input, [tabindex="0"]')].filter(el => el.getClientRects().length);
+    const buttons = [...overlay.querySelectorAll('button, a[href], select, input, [tabindex="0"]')].filter(el => el.getClientRects().length);
     if (!buttons.length) { e.preventDefault(); return; }
     const first = buttons[0], last = buttons.at(-1);
     if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
@@ -1518,7 +1541,96 @@ $('#backup-file').onchange = () => {
 $('#backup-previous').onclick = () => openBackup(() => localStorage.getItem(PRE_IMPORT_KEY));
 $('#modal-close').onclick = closeModal;
 
-AlienSetup.scenarios.forEach(scenario => {
+// ---------- Selector de juego y acciones de X-Files ----------
+$('#btn-games').onclick = () => {
+  for (const link of document.querySelectorAll('[data-game]')) {
+    const url = new URL(location.href); url.searchParams.set('game', link.dataset.game); url.hash = '';
+    try { const code = localStorage.getItem(`lea-last-room-v1:${link.dataset.game}`); if (code) url.hash = `room=${code}`; } catch {}
+    link.href = url.href;
+    link.setAttribute('aria-current', link.dataset.game === GAME.id ? 'page' : 'false');
+  }
+  $('#games-dialog').hidden = false;
+};
+$('#games-close').onclick = () => { $('#games-dialog').hidden = true; };
+for (const link of document.querySelectorAll('[data-game]')) link.onclick = async e => {
+  e.preventDefault();
+  await online?.queue;
+  save(); location.assign(link.href);
+};
+function updateTurnUI() {
+  if (!IS_XFILES) return;
+  const seat = online?.room?.seat || 1;
+  $('#turn-summary').textContent = state?.setup
+    ? `Turno del jugador ${state.setup.turn} · Tu zona: jugador ${seat} · ${state.hand.length} cartas en tu mano`
+    : 'Pulsa Preparar para elegir las temporadas y los agentes.';
+  for (const button of document.querySelectorAll('[data-xf-command]')) {
+    button.disabled = !state?.setup || Boolean(online?.active && !online.connected)
+      || (button.dataset.xfCommand === 'endTurn' && state.setup.turn !== seat);
+  }
+}
+let xfilesPending = false;
+async function xfilesAction(action) {
+  if (xfilesPending) return;
+  xfilesPending = true;
+  $('#turn-feedback').textContent = 'Aplicando…';
+  $('#turn-feedback').classList.remove('error');
+  for (const button of document.querySelectorAll('[data-xf-command]')) button.disabled = true;
+  try {
+    let message;
+    if (online?.active) {
+      const response = await online.action({ type: 'xfiles', ...action }); message = response.message || 'Acción completada';
+    } else {
+      const next = clone(state);
+      message = GameSetup.act(next, next.hand, 1, action);
+      pushUndo(); state = next; renderAll();
+    }
+    $('#turn-feedback').textContent = message; status(message);
+    if (action.command === 'playHand') focusZone('player');
+  } catch (error) {
+    $('#turn-feedback').textContent = error.message; $('#turn-feedback').classList.add('error'); status(error.message);
+  } finally { xfilesPending=false; updateTurnUI(); }
+}
+function xfilesCardActions(object) {
+  if (!IS_XFILES || !state.setup || object.cards.length !== 1) return [];
+  const slot = GameSetup.bureauSlot(object);
+  if (!slot) return [];
+  if (!object.faceUp) return [['Escanear Bureau', () => xfilesAction({command:'bureau', slot, mode:'scan'})]];
+  return [['Reclutar y reponer', () => xfilesAction({command:'bureau', slot, mode:'recruit'})],
+    ...(slot===1 ? [['Reclutar encima de mi mazo', () => xfilesAction({command:'bureau',slot,mode:'top'})]] : []),
+    ...(slot===2 ? [['Reclutar debajo de mi mazo', () => xfilesAction({command:'bureau',slot,mode:'bottom'})]] : [])];
+}
+$('#btn-turn').onclick = () => { updateTurnUI(); $('#turn-feedback').textContent=''; $('#turn-dialog').hidden=false; };
+$('#turn-close').onclick = () => { $('#turn-dialog').hidden=true; };
+for (const button of document.querySelectorAll('[data-xf-command]')) button.onclick = () => xfilesAction({
+  command: button.dataset.xfCommand, count: Number(button.dataset.count), resource: button.dataset.resource,
+});
+if (IS_XFILES) {
+  GameSetup.heroes.forEach((hero,i) => {
+    const label=document.createElement('label'), input=document.createElement('input');
+    input.type='checkbox'; input.value=i+1; input.checked=[2,3,4,9].includes(i+1); input.onchange=updateSetupSummary;
+    label.append(input,document.createTextNode(hero)); $('#xf-heroes').appendChild(label);
+  });
+  GameSetup.avatars.forEach((avatar,i) => {
+    const label=document.createElement('label'), select=document.createElement('select');
+    label.dataset.xfAvatarLabel=''; select.id=`xf-avatar-${i+1}`;
+    GameSetup.avatars.forEach(a => { const option=document.createElement('option'); option.value=a.id; option.textContent=a.name; select.appendChild(option); });
+    select.value=avatar.id; label.append(document.createTextNode(`Jugador ${i+1}`),select); $('#xf-avatars').appendChild(label);
+  });
+  $('#xf-random-heroes').onclick=() => {
+    const choices=[1,2,3,4,5,6,7,8,9]; shuffle(choices);
+    for (const input of document.querySelectorAll('#xf-heroes input')) input.checked=choices.slice(0,4).includes(Number(input.value));
+    updateSetupSummary();
+  };
+  const refill=document.createElement('div'); refill.className='bureau-refill';
+  const title=document.createElement('p'); title.textContent='Reponer un espacio vacío del Bureau'; refill.appendChild(title);
+  for(let slot=1;slot<=5;slot++) {
+    const button=document.createElement('button'); button.textContent=String(slot); button.setAttribute('aria-label',`Reponer Bureau ${slot}`);
+    button.dataset.xfCommand='bureau'; button.onclick=() => xfilesAction({command:'bureau',slot,mode:'refill'}); refill.appendChild(button);
+  }
+  $('#turn-actions').after(refill);
+}
+
+GameSetup.scenarios.forEach(scenario => {
   const option = document.createElement('option');
   option.value = scenario.id;
   option.textContent = scenario.title;
@@ -1526,9 +1638,18 @@ AlienSetup.scenarios.forEach(scenario => {
 });
 function updateSetupSummary() {
   if (!initial) return;
-  const scenario = AlienSetup.scenarios.find(s => s.id === $('#setup-scenario').value);
+  const scenario = GameSetup.scenarios.find(s => s.id === $('#setup-scenario').value);
+  if (!scenario) return;
+  if (IS_XFILES) {
+    const players = Number($('#setup-players').value);
+    $('#xfiles-seasons').hidden = scenario.id !== 'custom';
+    document.querySelectorAll('[data-xf-avatar-label]').forEach((label, i) => { label.hidden = i >= players; });
+    const selected = document.querySelectorAll('#xf-heroes input:checked').length;
+    $('#setup-summary').textContent = `${selected}/4 personajes · Conspiración: ${3*(players+8)+1} cartas en tres etapas · Mano inicial: 6 cartas.`;
+    return;
+  }
   const baseSize = scenario.stages.reduce((n, id) => n + initial.find(o => o.sourceId === id).cards.length, 0);
-  const droneCount = AlienSetup.dronesByPlayers[Number($('#setup-players').value) - 1].reduce((a, b) => a + b, 0);
+  const droneCount = GameSetup.dronesByPlayers[Number($('#setup-players').value) - 1].reduce((a, b) => a + b, 0);
   $('#setup-summary').textContent = `${scenario.crewLabel}. Colmena: ${baseSize + droneCount} cartas (${droneCount} drones).`;
 }
 $('#btn-setup').onclick = () => {
@@ -1537,6 +1658,17 @@ $('#btn-setup').onclick = () => {
     $('#setup-scenario').value = state.setup.scenario;
     $('#setup-players').value = state.setup.players;
     $('#setup-drones').checked = state.setup.expansionDrones;
+    if (IS_XFILES) {
+      document.querySelectorAll('#xf-heroes input').forEach(input => { input.checked = state.setup.heroes.includes(Number(input.value)); });
+      state.setup.avatars.forEach((avatar, i) => { $(`#xf-avatar-${i+1}`).value=avatar; });
+      state.setup.seasons.forEach((season, i) => { $(`#xf-season-${i+1}`).value=season; });
+    }
+  }
+  if (IS_XFILES) {
+    // A browser controls one private hand; additional seats are provided by rooms.
+    for (const option of $('#setup-players').options) option.disabled = !online?.active && Number(option.value)>1;
+    if (!online?.active) $('#setup-players').value='1';
+    else $('#setup-players').value=String(Math.max(Number($('#setup-players').value), online.room.players.length));
   }
   updateSetupSummary();
   $('#setup-error').hidden = true;
@@ -1547,17 +1679,23 @@ $('#setup-close').onclick = () => { $('#setup').hidden = true; };
 $('#setup-scenario').onchange = $('#setup-players').onchange = updateSetupSummary;
 $('#setup-form').onsubmit = async e => {
   e.preventDefault();
+  const options = { scenario: $('#setup-scenario').value, players: Number($('#setup-players').value), expansionDrones: $('#setup-drones').checked };
+  if (IS_XFILES) Object.assign(options, {
+    heroes: [...document.querySelectorAll('#xf-heroes input:checked')].map(input => Number(input.value)),
+    avatars: Array.from({length: options.players}, (_, i) => $(`#xf-avatar-${i+1}`).value),
+    seasons: [1,2,3].map(n => Number($(`#xf-season-${n}`).value)),
+  });
   if (online?.active) {
-    const result = await onlineAction({ type: 'setup', options: {
-      scenario: $('#setup-scenario').value, players: Number($('#setup-players').value), expansionDrones: $('#setup-drones').checked
-    } });
+    $('#setup-submit').disabled = true;
+    const result = await onlineAction({ type: 'setup', options });
+    $('#setup-submit').disabled = false;
     if (result) { $('#setup').hidden = true; focusZone('playmat'); }
+    else { $('#setup-error').textContent = $('#room-error').textContent; $('#setup-error').hidden=false; }
     return;
   }
   try {
-    const prepared = AlienSetup.create(initial, {
-      scenario: $('#setup-scenario').value, players: Number($('#setup-players').value), expansionDrones: $('#setup-drones').checked
-    });
+    const prepared = GameSetup.create(initial, options);
+    if (IS_XFILES) GameSetup.draw(prepared, prepared.hand, 1, 6);
     pushUndo();
     cancelPlacement();
     closeInspector();
