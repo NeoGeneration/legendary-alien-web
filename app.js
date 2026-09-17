@@ -1608,7 +1608,7 @@ async function xfilesAction(action) {
 }
 function xfilesCardActions(object) {
   if (!IS_XFILES || !state.setup || object.cards.length !== 1) return [];
-  const slot = GameSetup.bureauSlot(object);
+  const slot = GameSetup.bureauSlot(object, state);
   if (!slot) return [];
   if (!object.faceUp) return [['Escanear Bureau', () => xfilesAction({command:'bureau', slot, mode:'scan'})]];
   return [['Reclutar y reponer', () => xfilesAction({command:'bureau', slot, mode:'recruit'})],

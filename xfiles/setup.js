@@ -3,7 +3,24 @@
 // Workshop 3245264516: StartGame, SetupBureau, BuildSeason and player actions.
 const XFilesSetup = (() => {
   let layout;
-  const configure = data => { layout = { zones: data.zones, colors: data.colors }; };
+  function configure(data) {
+    const mat = data.objects.find(o => o.type === 'playmat');
+    // Centers measured on the replacement 3200 × 1421 playmat. Keep the
+    // original TTS zones for games prepared before this calibration.
+    const point = (x, y) => ({ x: mat.x + (x / 3200 - .5) * mat.width, z: mat.z + (.5 - y / 1421) * mat.height });
+    const boardZones = {
+      Evidence1: point(610, 280), Evidence2: point(610, 715), Evidence3: point(610, 1145),
+      BeliefStack: point(950, 280), DoubtStack: point(950, 715), SpecialAgents: point(950, 1145),
+      ConspiracyDeck: point(2695, 280), Strikes: point(2695, 715), Academy: point(2695, 1145),
+      DefeatedEnemies: point(2998, 280), DiscardedStrikes: point(2998, 715), DefeatedHeroes: point(2998, 1145),
+    };
+    for (let i = 1; i <= 5; i++) {
+      boardZones['Shadows' + i] = point(1110 + (i - .5) * (2518 - 1110) / 5, 280);
+      boardZones['Bureau' + i] = point(1114 + (i - .5) * (2521 - 1114) / 5, 1125);
+    }
+    for (let i = 1; i <= 6; i++) boardZones['CombatZone' + i] = point(1114 + (i - .5) * (2521 - 1114) / 6, 719);
+    layout = { zones: data.zones, colors: data.colors, boardZones };
+  }
   const scenarios = [
     { id: 'seasons-1-3', title: 'Temporadas 1–3', seasons: [1, 2, 3] },
     { id: 'seasons-4-6', title: 'Temporadas 4–6', seasons: [4, 5, 6] },
@@ -24,7 +41,7 @@ const XFilesSetup = (() => {
     for (let i = cards.length - 1; i > 0; i--) { const j = Math.floor(random() * (i + 1)); [cards[i], cards[j]] = [cards[j], cards[i]]; }
     return cards;
   }
-  const position = name => layout.zones[name];
+  const position = (name, game) => (game?.setup?.boardLayout === 2 && layout.boardZones[name]) || layout.zones[name];
   const seatZone = (game, seat, zone) => game.objects.find(o => o.type === 'player-zone' && o.playerId === seat && o.zone === zone);
   const at = (game, p) => game.objects.filter(o => o.type === 'stack' && Math.abs(o.x - p.x) < 1.1 && Math.abs(o.z - p.z) < 1.5).sort((a, b) => (b.z_ || 0) - (a.z_ || 0));
   const removeEmpty = game => { game.objects = game.objects.filter(o => o.type !== 'stack' || o.cards.length); };
@@ -79,26 +96,29 @@ const XFilesSetup = (() => {
     const objects = copy(initial).map((o, i) => ({ ...o, id: i+1, z_: i }));
     const game = { gameId: 'xfiles', schemaVersion: 4, objects, hand: [], nextId: objects.length+1,
       setup: { scenario: scenario.id, title: scenario.id === 'custom' ? `Temporadas ${seasons.join(' / ')}` : scenario.title,
-        players, seasons: [...seasons], heroes: [...selectedHeroes], avatars: selectedAvatars, turn: 1, conspiracySize: 5 } };
+        players, seasons: [...seasons], heroes: [...selectedHeroes], avatars: selectedAvatars, turn: 1, conspiracySize: 5, boardLayout: 2 } };
     const find = name => {
       const stack = objects.find(o => (o.key || o.name) === name && o.type === 'stack');
       if (!stack) throw new Error('Falta un mazo de X-Files: ' + name);
       return stack;
     };
+    for (const [key, zone] of Object.entries({ Belief: 'BeliefStack', Doubt: 'DoubtStack', StrikesDeck: 'Strikes', SpecialAgentDeck: 'SpecialAgents' })) {
+      Object.assign(find(key), position(zone, game));
+    }
     for (const key of ['Evidence1Deck','Evidence2Deck','Evidence3Deck','Informant','Lead','SyndaciteEnemy','EndGame','Cliffhanger','StrikesDeck','SpecialAgentDeck']) shuffle(find(key).cards, random);
     const academy = selectedHeroes.flatMap(n => find('Market'+n).cards.splice(0));
     academy.push(...find('SyndaciteEnemy').cards.splice(0, 6));
     shuffle(academy, random);
-    for (let i=1; i<=5; i++) add(game, 'Bureau ' + i, academy.splice(0, 1), position('Bureau'+i), false);
-    add(game, 'Academia', academy, position('Academy'), false);
+    for (let i=1; i<=5; i++) add(game, 'Bureau ' + i, academy.splice(0, 1), position('Bureau'+i, game), false);
+    add(game, 'Academia', academy, position('Academy', game), false);
     const layers = seasons.map(n => {
       const cards = shuffle(find('Season'+n).cards, random).splice(0, players+6);
       cards.push(...find('Informant').cards.splice(0, 1), ...find('Lead').cards.splice(0, 1));
       return shuffle(cards, random);
     });
     game.setup.conspiracyLayers = layers.map(cards => cards.length);
-    add(game, 'Conspiración', [...layers.flat(), ...find('EndGame').cards.splice(0, 1)], position('ConspiracyDeck'), false);
-    for (let i=1; i<=3; i++) add(game, 'Evidencia · Prioridad '+i, find('Evidence'+i+'Deck').cards.splice(0, 1), position('Evidence'+i), true);
+    add(game, 'Conspiración', [...layers.flat(), ...find('EndGame').cards.splice(0, 1)], position('ConspiracyDeck', game), false);
+    for (let i=1; i<=3; i++) add(game, 'Evidencia · Prioridad '+i, find('Evidence'+i+'Deck').cards.splice(0, 1), position('Evidence'+i, game), true);
     for (let seat=1; seat<=5; seat++) {
       const stack = find(layout.colors[seat-1]+'StartingDeck');
       if (seat <= players) {
@@ -146,14 +166,14 @@ const XFilesSetup = (() => {
       case 'gain': {
         const names = { belief: 'BeliefStack', doubt: 'DoubtStack', strike: 'Strikes', agent: 'SpecialAgents' };
         if (!names[action.resource]) throw new Error('Reserva no válida.');
-        const cards = take(game, position(names[action.resource]));
+        const cards = take(game, position(names[action.resource], game));
         if (!cards.length) throw new Error('Esa reserva está vacía.');
         put(game, cards, action.resource==='strike' ? seatZone(game,seat,'strikes') : discard, action.resource==='strike' ? 'Heridas' : 'Descarte');
         return 'Carta recibida · Resuelve su efecto';
       }
       case 'bureau': {
         if (!Number.isInteger(action.slot) || action.slot<1 || action.slot>5) throw new Error('Espacio del Bureau no válido.');
-        const p=position('Bureau'+action.slot), stack=at(game,p)[0];
+        const p=position('Bureau'+action.slot, game), stack=at(game,p)[0];
         if (action.mode==='scan') {
           if (!stack) throw new Error('Ese espacio está vacío.');
           if (stack.faceUp) throw new Error('Esa carta ya está revelada.');
@@ -166,29 +186,29 @@ const XFilesSetup = (() => {
           const cards=take(game,p), toDeck=['top','bottom'].includes(action.mode);
           put(game,cards,toDeck?seatZone(game,seat,'draw'):discard,toDeck?'Mazo de jugador '+seat:'Descarte',!toDeck,action.mode==='bottom');
         } else if (stack) throw new Error('Ese espacio ya tiene una carta.');
-        add(game,'Bureau '+action.slot,take(game,position('Academy')),p,false);
+        add(game,'Bureau '+action.slot,take(game,position('Academy', game)),p,false);
         return 'Bureau actualizado · Resuelve el coste y el beneficio de la carta';
       }
       case 'conspiracy': {
         const size=game.setup.conspiracySize || 5;
         let empty=0;
-        for (let i=size;i>=1;i--) if (!at(game,position('Shadows'+i)).length) { empty=i; break; }
+        for (let i=size;i>=1;i--) if (!at(game,position('Shadows'+i, game)).length) { empty=i; break; }
         if (!empty) {
-          const first=at(game,position('Shadows1'))[0];
-          let combat=1; while(combat<6 && at(game,position('CombatZone'+combat)).length) combat++;
+          const first=at(game,position('Shadows1', game))[0];
+          let combat=1; while(combat<6 && at(game,position('CombatZone'+combat, game)).length) combat++;
           if (!first.faceUp) first.cards.reverse();
-          Object.assign(first,position('CombatZone'+combat),{faceUp:true}); empty=1;
+          Object.assign(first,position('CombatZone'+combat, game),{faceUp:true}); empty=1;
         }
-        for (let i=empty+1;i<=size;i++) for (const stack of at(game,position('Shadows'+i))) Object.assign(stack,position('Shadows'+(i-1)));
-        const cards=take(game,position('ConspiracyDeck'));
-        if (cards.length) add(game,'Sombras',[...cards],position('Shadows'+size),false);
+        for (let i=empty+1;i<=size;i++) for (const stack of at(game,position('Shadows'+i, game))) Object.assign(stack,position('Shadows'+(i-1), game));
+        const cards=take(game,position('ConspiracyDeck', game));
+        if (cards.length) add(game,'Sombras',[...cards],position('Shadows'+size, game),false);
         else game.setup.conspiracySize=Math.max(1,size-1);
         return 'Conspiración avanzada · Resuelve las cartas y sus efectos';
       }
       default: throw new Error('Acción de X-Files no reconocida.');
     }
   }
-  const bureauSlot = object => [1,2,3,4,5].find(n => Math.abs(object.x-position('Bureau'+n).x)<1.1 && Math.abs(object.z-position('Bureau'+n).z)<1.5);
+  const bureauSlot = (object, game) => [1,2,3,4,5].find(n => Math.abs(object.x-position('Bureau'+n, game).x)<1.1 && Math.abs(object.z-position('Bureau'+n, game).z)<1.5);
   return { configure, scenarios, heroes, avatars, create, draw, act, seatZone, bureauSlot, firstTurn };
 })();
 if (typeof module !== 'undefined') module.exports = XFilesSetup;
