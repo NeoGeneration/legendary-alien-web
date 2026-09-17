@@ -163,7 +163,7 @@ const XFilesSetup = (() => {
     });
     game.setup.conspiracyLayers = layers.map(cards => cards.length);
     add(game, 'Conspiración', [...layers.flat(), ...find('EndGame').cards.splice(0, 1)], position('ConspiracyDeck', game), false);
-    for (let i=1; i<=3; i++) add(game, 'Evidencia · Prioridad '+i, find('Evidence'+i+'Deck').cards.splice(0, 1), position('Evidence'+i, game), true);
+    for (let i=1; i<=3; i++) add(game, 'Evidencia · Prioridad '+i, find('Evidence'+i+'Deck').cards.splice(0, 1), position('Evidence'+i, game), false);
     for (let seat=1; seat<=5; seat++) {
       const stack = find(layout.colors[seat-1]+'StartingDeck');
       if (seat <= players) {
