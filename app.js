@@ -487,7 +487,9 @@ function renderObj(o) {
       el.appendChild(c);
     }
   } else if (o.type === 'board' || o.type === 'tile' || o.type === 'playmat' || o.type === 'player-zone') {
-    el.style.backgroundImage = o.img ? `url("${o.img}")` : '';
+    // Refresh the replacement texture even for existing saves and rooms.
+    const img = o.img === 'xfiles/assets/playmat.jpg' ? `${o.img}?v=2` : o.img;
+    el.style.backgroundImage = img ? `url("${img}")` : '';
     el.style.transform = `rotate(${o.rot - 180}deg)`;
     if (o.type === 'player-zone') {
       if (o.labelOnly) {
