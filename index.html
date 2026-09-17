@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0b0f0e">
 <title>Legendary Encounters: Alien — Mesa</title>
-<link rel="stylesheet" href="style.css?v=19">
+<link rel="stylesheet" href="style.css?v=20">
 </head>
 <body class="access-locked">
 <main id="app-access">
@@ -134,6 +134,7 @@
       <h2>X-Files</h2>
       <p>Prepara las temporadas y los agentes desde Preparar. Usa Turno para robar, jugar tu mano, terminar el turno y avanzar la conspiración. Al robar se baraja el descarte si se agota tu mazo.</p>
       <p>En el Bureau, abre las acciones de una carta para escanearla o reclutarla y reponer su espacio. Los costes, las decisiones y los efectos de las cartas se resuelven manualmente. Creencia y Duda son cartas de sus reservas.</p>
+      <p>Reserva organiza los mazos de arriba por categorías. Busca «Syndicate» o «Sindicato» y toca su nombre para abrir las acciones, o «Localizar» para verlo en la mesa.</p>
       <p><a href="xfiles/assets/rules.pdf" target="_blank" rel="noopener">Reglamento original en inglés</a></p>
     </section>
     <section id="backup-tools" aria-labelledby="backup-title">
@@ -171,7 +172,7 @@
       <li><b>Ampliar:</b> muestra solo la carta, sin marco. Si usas el botón, toca fuera de la carta, pulsa × o Escape para cerrar. Ambas formas conservan su orientación y la disposición de la mesa.</li>
       <li><b>Colocar:</b> elige «Colocar en mesa» y toca el destino. También puedes arrastrar cartas.</li>
       <li><b>Vista:</b> pellizca con dos dedos o usa +/−. Los accesos de arriba acercan cada zona. En horizontal verás más tablero.</li>
-      <li><b>Tu mano:</b> desliza para recorrer las cartas; toca una para jugarla. Puedes plegar la mano para ganar espacio.</li>
+      <li><b>Tu mano:</b> toca una carta y después su destino en la mesa, o arrástrala. «Ampliar» y «Acciones» están disponibles al seleccionarla. Desliza para recorrer la mano o pliégala para ganar espacio.</li>
       <li><b>Strikes, Draw, Avatar y Discard:</b> son zonas fijas del jugador. Coloca las cartas encima; quedan centradas sin mezclar la base en el mazo.</li>
       <li><b>Contadores:</b> cada jugador dispone de Strikes, Combate y Estrellas. Usa +/−; en móvil, toca el contador para abrir botones grandes.</li>
       <li><b>Arrastrar un mazo</b>: saca solo la carta superior. Para moverlo entero, haz doble clic y arrastra, o usa <b>Shift + arrastrar</b>. Soltar encima de otra carta o mazo: apilar.</li>
@@ -195,6 +196,18 @@
     </div>
   </div>
 </div>
+<div id="reserve-dialog" class="overlay" hidden role="dialog" aria-modal="true" aria-labelledby="reserve-title">
+  <div class="modal-box">
+    <div class="modal-head"><span id="reserve-title">Mazos de reserva</span><button id="reserve-close">Cerrar</button></div>
+    <div class="reserve-tools">
+      <label for="reserve-search">Buscar un mazo</label>
+      <input id="reserve-search" type="search" placeholder="Syndicate, temporada, evidencia…" autocomplete="off">
+      <p>Toca el nombre para abrir sus acciones sin revelar las cartas.</p>
+      <button id="reserve-table">Ver reserva en la mesa</button>
+    </div>
+    <div id="reserve-list"></div>
+  </div>
+</div>
 <div id="turn-dialog" class="overlay" hidden role="dialog" aria-modal="true" aria-labelledby="turn-title">
   <div class="modal-box"><div class="modal-head"><span id="turn-title">Turno</span><button id="turn-close">Cerrar</button></div>
     <div class="turn-content"><p id="turn-summary"></p><div id="turn-actions">
@@ -215,6 +228,6 @@
 <script src="access.js?v=1"></script>
 <script src="multiplayer.js?v=9"></script>
 <script src="backup.js?v=2"></script>
-<script src="app.js?v=24"></script>
+<script src="app.js?v=25"></script>
 </body>
 </html>

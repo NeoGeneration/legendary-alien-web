@@ -80,6 +80,8 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--accent
 .text3d { color: #fff; white-space: pre; text-align: center; pointer-events: none; font-weight: 600; text-shadow: 0 0 4px #000; }
 .stack { cursor: pointer; border-radius: 5%; background-size: 100% 100%; background-color: #222; box-shadow: 0 1px 3px #000a; }
 .stack.deck { box-shadow: 1px 1px 0 #555, 2px 2px 0 #444, 3px 3px 0 #333, 3px 4px 6px #000b; }
+.reserve-label { position: absolute; bottom: 0; left: 0; width: 100%; padding: 5px 3px; border-radius: 0 0 4px 4px;
+  background: #0b1413ed; color: #edf5ef; text-align: center; font-size: 12px; line-height: 1.2; font-weight: 650; pointer-events: none; overflow-wrap: anywhere; }
 .stack.hover { outline: 2px solid var(--accent); }
 .obj.selected { outline: 3px solid var(--accent); outline-offset: 3px; }
 .stack.drop { outline: 3px solid var(--accent); }
@@ -111,6 +113,7 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--accent
 #hand-cards p { color: #92a398; margin: auto; text-align: center; font-size: 12px; padding: 8px; max-width: 340px; }
 #hand-cards img { height: 100%; width: auto; flex-shrink: 0; border-radius: 5px; cursor: grab; object-fit: contain; -webkit-user-drag: none; touch-action: pan-x; -webkit-touch-callout: none; }
 #hand-cards img.hand-dragging { opacity: .35; cursor: grabbing; }
+#hand-cards img.selected { outline: 3px solid var(--accent); outline-offset: 3px; }
 #hand.collapsed #hand-cards { display: none; }
 #hand.drop { background: #293c22; }
 #preview { position: fixed; right: 12px; top: calc(var(--header-h) + var(--zones-h) + 12px); z-index: 20; pointer-events: none; }
@@ -128,6 +131,18 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--accent
 .modal-head button { flex-shrink: 0; }
 #modal-body { overflow: auto; padding: 12px; display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
 #modal-body img { width: 100%; border-radius: 6px; cursor: pointer; }
+#reserve-dialog .modal-box { max-width: 640px; }
+.reserve-tools { padding: 14px 16px; border-bottom: 1px solid var(--line); flex-shrink: 0; }
+.reserve-tools label { display: block; margin-bottom: 6px; font-weight: 600; }
+#reserve-search { width: 100%; min-height: 44px; font-size: 16px; }
+.reserve-tools p { margin: 10px 0; font-size: 13px; color: #b9c7bf; }
+#reserve-list { overflow-y: auto; min-height: 0; padding: 0 16px 16px; }
+#reserve-list h3 { margin: 20px 0 6px; font-size: 13px; letter-spacing: .04em; color: var(--accent); }
+.reserve-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; border-bottom: 1px solid var(--line); }
+.reserve-row button { min-height: 44px; }
+.reserve-row .reserve-deck { display: flex; flex-direction: column; gap: 5px; padding: 12px 0; border: 0; background: transparent; text-align: left; }
+.reserve-deck strong { font-size: 15px; overflow-wrap: anywhere; }
+.reserve-deck span { font-size: 12px; color: #b9c7bf; }
 #modal-body img:hover { outline: 2px solid var(--accent); }
 .inspector-box { max-width: 650px; }
 #card-zoom { z-index: 45; background: transparent; align-items: center;

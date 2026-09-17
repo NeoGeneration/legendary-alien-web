@@ -271,6 +271,7 @@ function applyRemote(data) {
   else if (inspectorChanged) closeInspector();
   $('#menu').hidden = true;
   updateTurnUI();
+  refreshReserve();
   if (IS_XFILES && online?.active && data.room?.host && (state.playerLayout || 0) < GameSetup.playerLayout && !compactedRooms.has(online.code)) {
     compactedRooms.add(online.code);
     onlineAction({ type: 'xfilesLayout' }).then(result => {
@@ -463,6 +464,7 @@ function renderAll() {
     .forEach(o => { renderObj(o); });
   renderHand();
   updateTurnUI();
+  refreshReserve();
   save();
 }
 
@@ -509,6 +511,12 @@ function renderObj(o) {
       c.className = 'count';
       c.textContent = o.cards.length;
       el.appendChild(c);
+    }
+    if (isReserveStack(o)) {
+      const label = document.createElement('span');
+      label.className = 'reserve-label';
+      label.textContent = reserveInfo(o).name;
+      el.appendChild(label);
     }
   } else if (o.type === 'board' || o.type === 'tile' || o.type === 'playmat' || o.type === 'player-zone') {
     // Refresh the replacement texture even for existing saves and rooms.
@@ -650,6 +658,82 @@ function manualView() {
   document.querySelectorAll('[data-zone]').forEach(b => b.setAttribute('aria-pressed', 'false'));
 }
 
+// The reserve index uses public stack names only, never hidden card faces.
+const RESERVE_GROUPS = ['Apoyos y enemigos', 'Temporadas', 'Evidencias', 'Personajes de la Academia', 'Agentes', 'Mazos iniciales', 'Otros'];
+const RESERVE_NAMES = {
+  SyndaciteEnemy: ['Syndicate Enemy', 'Enemigos del Sindicato'],
+  Informant: ['Informant', 'Informantes'], Lead: ['Lead', 'Pistas'],
+  Cliffhanger: ['Cliffhanger', 'Cliffhangers'], EndGame: ['End Game', 'Finales'],
+};
+function isReserveStack(o) {
+  return IS_XFILES && o.type === 'stack' && o.cards.length > 0 && o.z >= 19;
+}
+function reserveInfo(o) {
+  const key = o.key || '';
+  const [name, translation = ''] = RESERVE_NAMES[key] || [o.name || 'Mazo'];
+  const group = RESERVE_NAMES[key] ? 0 : /^Season\d$/.test(key) ? 1
+    : /^Evidence\dDeck$/.test(key) ? 2 : /^Market\d$/.test(key) ? 3
+    : GameSetup.avatars?.some(a => a.id === key) ? 4 : /StartingDeck$/.test(key) ? 5 : 6;
+  return { name, translation, group };
+}
+function reserveEntries(query = '') {
+  const normalize = text => text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const words = normalize(query).trim().split(/\s+/);
+  return state.objects.filter(isReserveStack).map(o => ({ id: o.id, count: o.cards.length, ...reserveInfo(o) }))
+    .filter(entry => words.every(word => normalize(`${entry.name} ${entry.translation} ${RESERVE_GROUPS[entry.group]}`).includes(word)))
+    .sort((a, b) => a.group - b.group || (a.name === 'Syndicate Enemy' ? -1 : b.name === 'Syndicate Enemy' ? 1 : a.name.localeCompare(b.name, 'es', { numeric: true })));
+}
+function refreshReserve() {
+  if (!IS_XFILES || $('#reserve-dialog').hidden) return;
+  const body = $('#reserve-list');
+  const focused = document.activeElement?.dataset.reserveAction;
+  body.innerHTML = '';
+  const entries = reserveEntries($('#reserve-search').value);
+  let group = -1;
+  for (const entry of entries) {
+    if (entry.group !== group) {
+      group = entry.group;
+      const heading = document.createElement('h3'); heading.textContent = RESERVE_GROUPS[group]; body.appendChild(heading);
+    }
+    const row = document.createElement('div'); row.className = 'reserve-row';
+    const open = document.createElement('button'); open.className = 'reserve-deck';
+    const name = document.createElement('strong'); name.textContent = entry.name;
+    const detail = document.createElement('span');
+    detail.textContent = [entry.translation, `${entry.count} ${entry.count === 1 ? 'carta' : 'cartas'}`, 'Acciones'].filter(Boolean).join(' · ');
+    open.append(name, detail);
+    open.setAttribute('aria-label', `${entry.name} · ${entry.count} cartas · Abrir acciones`);
+    const locate = document.createElement('button'); locate.textContent = 'Localizar';
+    locate.setAttribute('aria-label', `Localizar ${entry.name} en la mesa`);
+    for (const [button, action] of [[open, 'inspect'], [locate, 'locate']]) {
+      button.dataset.reserveAction = `${entry.id}:${action}`;
+      button.onclick = () => {
+        const current = byId(entry.id);
+        if (!current || !isReserveStack(current)) { refreshReserve(); return; }
+        closeReserve(); manualView(); fitObjects([current], 2);
+        if (action === 'inspect') { cancelPlacement(); inspectObject(current); }
+        else status(entry.name);
+      };
+    }
+    row.append(open, locate); body.appendChild(row);
+    for (const button of [open, locate]) if (button.dataset.reserveAction === focused) button.focus({ preventScroll: true });
+  }
+  if (!entries.length) {
+    const empty = document.createElement('p'); empty.textContent = 'No hay mazos de reserva que coincidan.'; body.appendChild(empty);
+  }
+}
+function openReserve() {
+  if (!state || !IS_XFILES) return;
+  closeInspector(); hidePreview(); $('#menu').hidden = true;
+  $('#reserve-search').value = '';
+  $('#reserve-dialog').hidden = false;
+  refreshReserve();
+  $('#reserve-close').focus({ preventScroll: true });
+}
+function closeReserve() {
+  $('#reserve-dialog').hidden = true;
+  $('#zones [data-zone="reserve"]').focus({ preventScroll: true });
+}
+
 function screenToWorld(cx, cy) {
   const r = viewport.getBoundingClientRect();
   return { x: (cx - r.left - view.x) / view.zoom / UNIT, z: -(cy - r.top - view.y) / view.zoom / UNIT };
@@ -677,10 +761,28 @@ function renderHand() {
     img.onpointerenter = e => { if (e.pointerType === 'mouse') hoveredHandCard = card; };
     img.onpointerleave = () => { if (hoveredHandCard === card) hoveredHandCard = null; hidePreview(); };
     img.onpointerdown = e => startHandDrag(e, i);
-    img.onclick = e => { if (!suppressHandClick) inspectHand(card); };
-    img.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); inspectHand(card); } };
+    img.onclick = () => { if (!suppressHandClick) selectHandCard(card); };
+    img.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); selectHandCard(card); } };
+    img.oncontextmenu = e => { e.preventDefault(); cancelPlacement(); inspectHand(card); };
     box.appendChild(img);
   });
+  updateHandSelection();
+}
+
+function selectHandCard(card) {
+  const current = state.hand.find(c => c.uid === card.uid);
+  if (!current) return;
+  closeInspector(); hidePreview(); $('#menu').hidden = true;
+  beginPlacement({ kind: 'hand', card: current });
+}
+
+function updateHandSelection() {
+  for (const img of $('#hand-cards').children) {
+    if (img.dataset.handIndex === undefined) continue;
+    const selected = placement?.kind === 'hand' && state.hand[Number(img.dataset.handIndex)]?.uid === placement.card.uid;
+    img.classList.toggle('selected', Boolean(selected));
+    img.setAttribute('aria-pressed', String(Boolean(selected)));
+  }
 }
 
 function addStack(cards, x, z, faceUp, scale, rot) {
@@ -1021,9 +1123,10 @@ function beginPlacement(next) {
     ? `Mazo entero · ${o.cards.length} cartas. Toca el destino.`
     : o && o.type !== 'stack' ? 'Ficha seleccionada. Toca el destino.'
     : '1 carta seleccionada. Toca el destino.';
-  $('#placement-actions').hidden = !o;
-  $('#placement-preview').hidden = o?.type !== 'stack';
+  $('#placement-actions').hidden = !o && next.kind !== 'hand';
+  $('#placement-preview').hidden = o?.type !== 'stack' && next.kind !== 'hand';
   if (o) els.get(o.id)?.classList.add('selected');
+  updateHandSelection();
   $('#placement').hidden = false;
   // Keep the next tap on the same deck reachable, even in short landscape views.
   const panel = $('#placement');
@@ -1042,6 +1145,7 @@ function cancelPlacement() {
   if (placement?.kind === 'stack') els.get(placement.id)?.classList.remove('selected');
   lastStackTap = null;
   placement = null;
+  updateHandSelection();
   $('#placement').hidden = true;
   viewport.classList.remove('placing');
 }
@@ -1449,15 +1553,16 @@ addEventListener('keydown', e => {
     if (e.key === 'Escape') { e.preventDefault(); closeCardZoom(); }
     return;
   }
-  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); undo(); return; }
-  if (e.key === 'Escape') { cancelHandGesture?.(); closeModal(); closeInspector(); cancelPlacement(); $('#help').hidden = true; $('#setup').hidden = true; $('#room-dialog').hidden = true; $('#games-dialog').hidden = true; $('#turn-dialog').hidden = true; $('#menu').hidden = true; return; }
-  if (!$('#inspector').hidden || !$('#modal').hidden || !$('#help').hidden || !$('#setup').hidden || !$('#room-dialog').hidden || !$('#games-dialog').hidden || !$('#turn-dialog').hidden) return;
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.target.closest?.('input, textarea, [contenteditable="true"]')) { e.preventDefault(); undo(); return; }
+  if (e.key === 'Escape') { cancelHandGesture?.(); closeModal(); closeInspector(); cancelPlacement(); if (!$('#reserve-dialog').hidden) closeReserve(); $('#help').hidden = true; $('#setup').hidden = true; $('#room-dialog').hidden = true; $('#games-dialog').hidden = true; $('#turn-dialog').hidden = true; $('#menu').hidden = true; return; }
+  if (!$('#inspector').hidden || !$('#modal').hidden || !$('#help').hidden || !$('#setup').hidden || !$('#room-dialog').hidden || !$('#games-dialog').hidden || !$('#turn-dialog').hidden || !$('#reserve-dialog').hidden) return;
   if (e.target.closest?.('input, textarea, select, [contenteditable="true"]')) return;
   if (space) {
     if (e.repeat || e.ctrlKey || e.metaKey || e.altKey || drag || pinch || suppressHandClick) return;
     const hoveredObject = hoverId && byId(hoverId);
     const handImage = document.activeElement?.closest?.('#hand-cards img');
-    const handCard = hoveredHandCard || (hoveredObject?.type !== 'stack' && handImage && state.hand[Number(handImage.dataset.handIndex)]);
+    const handCard = hoveredHandCard || (hoveredObject?.type !== 'stack' && handImage && state.hand[Number(handImage.dataset.handIndex)])
+      || (hoveredObject?.type !== 'stack' && placement?.kind === 'hand' && placement.card);
     const o = hoveredObject?.type === 'stack' ? hoveredObject : (placement?.kind === 'stack' && byId(placement.id));
     if (handCard) {
       e.preventDefault();
@@ -1492,7 +1597,10 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) relea
 
 // Botones
 $('#btn-undo').onclick = undo;
-document.querySelectorAll('[data-zone]').forEach(b => { b.onclick = () => focusZone(b.dataset.zone); });
+document.querySelectorAll('#zones [data-zone]').forEach(b => { b.onclick = () => IS_XFILES && b.dataset.zone === 'reserve' ? openReserve() : focusZone(b.dataset.zone); });
+$('#reserve-close').onclick = closeReserve;
+$('#reserve-search').oninput = refreshReserve;
+$('#reserve-table').onclick = () => { closeReserve(); focusZone('reserve'); };
 $('#zoom-in').onclick = () => zoomAt(viewport.clientWidth / 2, viewport.clientHeight / 2, view.zoom * 1.4);
 $('#zoom-out').onclick = () => zoomAt(viewport.clientWidth / 2, viewport.clientHeight / 2, view.zoom / 1.4);
 $('#inspector-close').onclick = closeInspector;
@@ -1510,13 +1618,16 @@ $('#cancel-placement').onclick = cancelPlacement;
 $('#placement-preview').onclick = () => {
   const o = placement?.kind === 'stack' && byId(placement.id);
   if (o?.type === 'stack') openCardZoom(o.cards[0], o.faceUp, o.rot - 180);
+  else if (placement?.kind === 'hand') openCardZoom(placement.card);
 };
 $('#card-zoom-close').onclick = closeCardZoom;
 new ResizeObserver(fitCardZoom).observe($('#card-zoom-body'));
 $('#placement-actions').onclick = () => {
   const o = placement?.kind === 'stack' && byId(placement.id);
+  const card = placement?.kind === 'hand' && state.hand.find(c => c.uid === placement.card.uid);
   cancelPlacement();
   if (o) inspectObject(o);
+  else if (card) inspectHand(card);
 };
 function updateHandToggle() {
   const expanded = !$('#hand').classList.contains('collapsed');
@@ -1529,6 +1640,7 @@ document.querySelectorAll('.overlay').forEach(overlay => {
     if (e.target !== overlay) return;
     if (overlay.id === 'help' && syncingDevice) return;
     if (overlay.id === 'card-zoom') closeCardZoom();
+    else if (overlay.id === 'reserve-dialog') closeReserve();
     else overlay.hidden = true;
   });
   overlay.addEventListener('keydown', e => {
