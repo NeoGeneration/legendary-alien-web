@@ -71,10 +71,12 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--accent
 .board, .tile, .playmat { background-size: 100% 100%; pointer-events: none; }
 .player-zone { background-size: 100% 100%; border-radius: 4%; cursor: grab; }
 .player-zone.drop { outline: 3px solid var(--accent); outline-offset: 3px; }
+.player-zone-art { position: absolute; inset: -21%; pointer-events: none;
+  background-size: 107% 105%; background-position: center; border-radius: 5% / 3.5%; box-shadow: 0 2px 5px #0008; }
 .labeled-zone { border: 2px solid #637582; background: #18263088; display: flex; align-items: center; justify-content: center; color: #b8cbd8; font-size: 13px; text-align: center; }
 .labeled-zone[data-zone="play"] { align-items: flex-start; border-style: dashed; }
 .labeled-zone[data-zone="play"] span { margin-top: -24px; white-space: nowrap; }
-.playmat { border-radius: 1.6%; box-shadow: 0 8px 28px #0008; }
+.playmat { border-radius: 1.8% / 4.2%; overflow: hidden; box-shadow: 0 8px 28px #0008; }
 .text3d { color: #fff; white-space: pre; text-align: center; pointer-events: none; font-weight: 600; text-shadow: 0 0 4px #000; }
 .stack { cursor: pointer; border-radius: 5%; background-size: 100% 100%; background-color: #222; box-shadow: 0 1px 3px #000a; }
 .stack.deck { box-shadow: 1px 1px 0 #555, 2px 2px 0 #444, 3px 3px 0 #333, 3px 4px 6px #000b; }

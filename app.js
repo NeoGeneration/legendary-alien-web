@@ -10,6 +10,12 @@ const IS_XFILES = GAME.id === 'xfiles';
 const GameSetup = IS_XFILES ? XFilesSetup : AlienSetup;
 const SAVE_KEY = GAME.saveKey;
 const PRE_IMPORT_KEY = GAME.previousKey;
+// Shared illustrated bases. Keep these visual so existing saves and room
+// coordinates still use the same card-sized drop areas.
+const PLAYER_ZONE_ART = {
+  draw: 'cards/230_12.jpg', discard: 'cards/231_7.jpg',
+  avatar: 'cards/229_2.jpg', strikes: 'cards/232_2.jpg',
+};
 
 const $ = s => document.querySelector(s);
 const world = $('#world'), viewport = $('#viewport');
@@ -492,8 +498,16 @@ function renderObj(o) {
     el.style.backgroundImage = img ? `url("${img}")` : '';
     el.style.transform = `rotate(${o.rot - 180}deg)`;
     if (o.type === 'player-zone') {
-      if (o.labelOnly) {
-        el.classList.add('labeled-zone'); el.dataset.zone = o.zone;
+      if (o.labelOnly) el.dataset.zone = o.zone;
+      const zoneArt = IS_XFILES && o.labelOnly && PLAYER_ZONE_ART[o.zone];
+      if (zoneArt) {
+        const art = document.createElement('div');
+        art.className = 'player-zone-art';
+        art.style.backgroundImage = `url("${zoneArt}")`;
+        art.setAttribute('aria-hidden', 'true');
+        el.appendChild(art);
+      } else if (o.labelOnly) {
+        el.classList.add('labeled-zone');
         const label = document.createElement('span'); label.textContent = o.name; el.appendChild(label);
       }
       el.setAttribute('role', 'img');
