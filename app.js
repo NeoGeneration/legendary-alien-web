@@ -41,6 +41,7 @@ let individualState = null, individualUndo = null, pendingRemote = null;
 let cancelHandGesture = null;
 let syncingDevice = false;
 let displayedPrivateCode = null;
+const compactedRooms = new Set();
 
 const els = new Map();   // id -> elemento DOM
 function counterIcon(resource) {
@@ -194,6 +195,7 @@ async function importBackup(backup) {
     backupMessage(`Sala recuperada: sigues siendo ${person.name}, Jugador ${data.room.seat}, con tu misma mano.`);
   } else {
     const previous = JSON.stringify(AlienBackup.create(state));
+    compactLocalPlayers(backup.state);
     const restored = JSON.stringify(backup.state);
     try {
       localStorage.setItem(PRE_IMPORT_KEY, previous);
@@ -269,6 +271,12 @@ function applyRemote(data) {
   else if (inspectorChanged) closeInspector();
   $('#menu').hidden = true;
   updateTurnUI();
+  if (IS_XFILES && online?.active && data.room?.host && state.playerLayout !== 2 && !compactedRooms.has(online.code)) {
+    compactedRooms.add(online.code);
+    onlineAction({ type: 'xfilesLayout' }).then(result => {
+      if (result && activeZone === 'player') focusZone('player');
+    });
+  }
 }
 
 function flushRemote() {
@@ -383,13 +391,23 @@ async function load() {
   }
   if (state.schemaVersion < 3) migratePlayerZones();
   if (state.schemaVersion < 4) migratePlayerCounters();
+  compactLocalPlayers(state);
   renderAll();
   focusZone('playmat');
   updateSetupSummary();
 }
 
 function freshState() {
-  return { gameId: GAME.id, objects: clone(initial), hand: [], nextId: initial.length + 1, schemaVersion: 4 };
+  const game = { gameId: GAME.id, objects: clone(initial), hand: [], nextId: initial.length + 1, schemaVersion: 4 };
+  if (IS_XFILES) GameSetup.compactPlayers(game);
+  return game;
+}
+
+function compactLocalPlayers(game) {
+  if (!IS_XFILES || game.playerLayout === 2) return;
+  try { localStorage.setItem('lex-web-before-player-layout-v2', JSON.stringify(game)); }
+  catch { status('No se ha podido guardar una copia de la disposición anterior. La mesa se conserva.'); return; }
+  GameSetup.compactPlayers(game);
 }
 
 function migratePlayerZones() {
@@ -582,16 +600,22 @@ function fitBounds(minX, maxX, minZ, maxZ) {
   applyView();
 }
 
-function fitView() {
-  const bounds = state.objects.map(o => {
-    const { w, h } = sizeOf(o), a = (o.rot || 0) * Math.PI / 180;
+function fitObjects(objects, padding = 0) {
+  const visible = objects.filter(o => !(o.type === 'player-zone' && o.zone === 'play'));
+  if (!visible.length) return;
+  const bounds = visible.map(o => {
+    const size = sizeOf(o), a = (o.rot || 0) * Math.PI / 180;
+    const frame = IS_XFILES && o.type === 'player-zone' && o.labelOnly ? 1.42 : 1;
+    const w = size.w * frame, h = size.h * frame;
     const dx = (Math.abs(w * Math.cos(a)) + Math.abs(h * Math.sin(a))) / 2;
     const dz = (Math.abs(w * Math.sin(a)) + Math.abs(h * Math.cos(a))) / 2;
     return [o.x - dx, o.x + dx, o.z - dz, o.z + dz];
   });
-  fitBounds(Math.min(...bounds.map(b => b[0])), Math.max(...bounds.map(b => b[1])),
-    Math.min(...bounds.map(b => b[2])), Math.max(...bounds.map(b => b[3])));
+  fitBounds(Math.min(...bounds.map(b => b[0]))-padding, Math.max(...bounds.map(b => b[1]))+padding,
+    Math.min(...bounds.map(b => b[2]))-padding, Math.max(...bounds.map(b => b[3]))+padding);
 }
+
+function fitView() { fitObjects(state.objects); }
 
 function focusZone(zone) {
   if (!state) return;
@@ -604,8 +628,9 @@ function focusZone(zone) {
     else if (zone === 'hq') fitBounds(-12, 18, -2, 4);
     else if (zone === 'reserve') fitBounds(-44, 44, 19, 34);
     else if (zone === 'player') {
-      const area = GameSetup.seatZone(state, online?.room?.seat || 1, 'play');
-      if (area) fitBounds(area.x-8.8, area.x+8.8, -26, -6);
+      const seat = online?.room?.seat || 1;
+      const area = GameSetup.seatZone(state, seat, 'play');
+      fitObjects(state.objects.filter(o => o.playerId === seat || GameSetup.inPlayArea(o, area)), .6);
     }
     return;
   }
@@ -1601,7 +1626,7 @@ async function xfilesAction(action) {
       pushUndo(); state = next; renderAll();
     }
     $('#turn-feedback').textContent = message; status(message);
-    if (action.command === 'playHand') focusZone('player');
+    if (action.command === 'playHand' || (action.command === 'endTurn' && activeZone === 'player')) focusZone('player');
   } catch (error) {
     $('#turn-feedback').textContent = error.message; $('#turn-feedback').classList.add('error'); status(error.message);
   } finally { xfilesPending=false; updateTurnUI(); }

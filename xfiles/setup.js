@@ -43,6 +43,49 @@ const XFilesSetup = (() => {
   }
   const position = (name, game) => (game?.setup?.boardLayout === 2 && layout.boardZones[name]) || layout.zones[name];
   const seatZone = (game, seat, zone) => game.objects.find(o => o.type === 'player-zone' && o.playerId === seat && o.zone === zone);
+  const inPlayArea = (object, area) => area && object.type === 'stack'
+    && Math.abs(object.x-area.x)<area.width/2 && Math.abs(object.z-area.z)<area.height/2;
+  function compactPlayers(game) {
+    if (game.gameId !== 'xfiles' || game.playerLayout === 2) return false;
+    const plans = [];
+    for (let seat = 1; seat <= 5; seat++) {
+      const area = seatZone(game, seat, 'play');
+      if (!area) continue;
+      const x = [0, -22, 22, -44, 44][seat-1];
+      const play = { x, z: -21, width: 16, height: 11 };
+      const bases = ['strikes', 'draw', 'avatar', 'discard'].map((zone, i) => {
+        const object = seatZone(game, seat, zone);
+        return object && { object, old: { ...object }, next: { x: x-6+i*4, z: -10 } };
+      }).filter(Boolean);
+      plans.push({ seat, area, old: { ...area }, play, bases, x });
+    }
+    // Move cards with their bases and translate played cards once. Preserve
+    // every card, order, ID, orientation, counter value and private hand.
+    for (const object of game.objects.filter(o => o.type === 'stack')) {
+      let moved = false;
+      for (const plan of plans) {
+        const base = plan.bases.find(b => Math.abs(object.x-b.old.x) <= 2.25*b.old.scale/2
+          && Math.abs(object.z-b.old.z) <= 3.15*b.old.scale/2);
+        if (base) {
+          object.x += base.next.x-base.old.x; object.z += base.next.z-base.old.z;
+          moved = true; break;
+        }
+      }
+      if (moved) continue;
+      const plan = plans.find(p => inPlayArea(object, p.old));
+      if (plan) { object.x += plan.play.x-plan.old.x; object.z += plan.play.z-plan.old.z; }
+    }
+    for (const plan of plans) {
+      for (const base of plan.bases) Object.assign(base.object, base.next);
+      Object.assign(plan.area, plan.play);
+      for (const object of game.objects.filter(o => o.type === 'counter' && o.playerId === plan.seat)) {
+        const z = { stars: -7, combat: -10, strikes: -13 }[object.resource];
+        if (z !== undefined) Object.assign(object, { x: plan.x-10, z });
+      }
+    }
+    game.playerLayout = 2;
+    return true;
+  }
   const at = (game, p) => game.objects.filter(o => o.type === 'stack' && Math.abs(o.x - p.x) < 1.1 && Math.abs(o.z - p.z) < 1.5).sort((a, b) => (b.z_ || 0) - (a.z_ || 0));
   const removeEmpty = game => { game.objects = game.objects.filter(o => o.type !== 'stack' || o.cards.length); };
   function add(game, name, cards, p, faceUp = true) {
@@ -97,6 +140,7 @@ const XFilesSetup = (() => {
     const game = { gameId: 'xfiles', schemaVersion: 4, objects, hand: [], nextId: objects.length+1,
       setup: { scenario: scenario.id, title: scenario.id === 'custom' ? `Temporadas ${seasons.join(' / ')}` : scenario.title,
         players, seasons: [...seasons], heroes: [...selectedHeroes], avatars: selectedAvatars, turn: 1, conspiracySize: 5, boardLayout: 2 } };
+    compactPlayers(game);
     const find = name => {
       const stack = objects.find(o => (o.key || o.name) === name && o.type === 'stack');
       if (!stack) throw new Error('Falta un mazo de X-Files: ' + name);
@@ -122,10 +166,12 @@ const XFilesSetup = (() => {
     for (let seat=1; seat<=5; seat++) {
       const stack = find(layout.colors[seat-1]+'StartingDeck');
       if (seat <= players) {
-        Object.assign(stack, position(layout.colors[seat-1]+'Draw'), { name: 'Mazo de jugador '+seat, faceUp: false });
+        const drawZone = seatZone(game, seat, 'draw');
+        Object.assign(stack, { x: drawZone.x, z: drawZone.z, name: 'Mazo de jugador '+seat, faceUp: false });
         shuffle(stack.cards, random);
         const avatar = find(selectedAvatars[seat-1]);
-        Object.assign(avatar, position(layout.colors[seat-1]+'Avatar'), { faceUp: true });
+        const avatarZone = seatZone(game, seat, 'avatar');
+        Object.assign(avatar, { x: avatarZone.x, z: avatarZone.z, faceUp: true });
       } else Object.assign(stack, { x: -12+(seat-1)*6, z: 21, name: 'Mazo inicial de reserva' });
     }
     game.objects = game.objects.filter(o => !o.playerId || o.playerId <= players);
@@ -147,7 +193,7 @@ const XFilesSetup = (() => {
         let slot=0;
         for (const card of hand.splice(0)) {
           let p;
-          do { p = { x: center.x-5.7+(slot%5)*2.85, z: -11.62-Math.floor(slot/5)*3.6 }; slot++; } while (at(game,p).length && slot < 15);
+          do { p = { x: center.x-5.7+(slot%5)*2.85, z: center.z+3.6-Math.floor(slot/5)*3.6 }; slot++; } while (at(game,p).length && slot < 15);
           add(game, 'Carta en juego', [card], p);
         }
         return 'Mano jugada';
@@ -155,7 +201,7 @@ const XFilesSetup = (() => {
       case 'endTurn': {
         if (game.setup.turn !== seat) throw new Error('Ahora es el turno del jugador '+game.setup.turn+'.');
         const area = seatZone(game, seat, 'play');
-        const played = game.objects.filter(o => o.type === 'stack' && Math.abs(o.x-area.x)<area.width/2 && Math.abs(o.z-area.z)<area.height/2);
+        const played = game.objects.filter(o => inPlayArea(o, area));
         const cards = [...hand.splice(0), ...played.flatMap(o => o.cards.splice(0))];
         removeEmpty(game); put(game, cards, discard, 'Descarte de jugador '+seat);
         const count = draw(game, hand, seat, 6, random);
@@ -209,6 +255,6 @@ const XFilesSetup = (() => {
     }
   }
   const bureauSlot = (object, game) => [1,2,3,4,5].find(n => Math.abs(object.x-position('Bureau'+n, game).x)<1.1 && Math.abs(object.z-position('Bureau'+n, game).z)<1.5);
-  return { configure, scenarios, heroes, avatars, create, draw, act, seatZone, bureauSlot, firstTurn };
+  return { configure, scenarios, heroes, avatars, create, draw, act, seatZone, bureauSlot, firstTurn, compactPlayers, inPlayArea };
 })();
 if (typeof module !== 'undefined') module.exports = XFilesSetup;
