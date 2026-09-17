@@ -74,8 +74,8 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--accent
 .player-zone-art { position: absolute; inset: -21%; pointer-events: none;
   background-size: 107% 105%; background-position: center; border-radius: 5% / 3.5%; box-shadow: 0 2px 5px #0008; }
 .labeled-zone { border: 2px solid #637582; background: #18263088; display: flex; align-items: center; justify-content: center; color: #b8cbd8; font-size: 13px; text-align: center; }
-.labeled-zone[data-zone="play"] { align-items: flex-start; border-style: dashed; }
-.labeled-zone[data-zone="play"] span { margin-top: -24px; white-space: nowrap; }
+/* Keep the play area in game state for turn actions, without drawing a box. */
+.labeled-zone[data-zone="play"] { display: none; }
 .playmat { border-radius: 1.8% / 4.2%; overflow: hidden; box-shadow: 0 8px 28px #0008; }
 .text3d { color: #fff; white-space: pre; text-align: center; pointer-events: none; font-weight: 600; text-shadow: 0 0 4px #000; }
 .stack { cursor: pointer; border-radius: 5%; background-size: 100% 100%; background-color: #222; box-shadow: 0 1px 3px #000a; }
