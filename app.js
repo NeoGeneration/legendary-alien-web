@@ -271,7 +271,7 @@ function applyRemote(data) {
   else if (inspectorChanged) closeInspector();
   $('#menu').hidden = true;
   updateTurnUI();
-  if (IS_XFILES && online?.active && data.room?.host && state.playerLayout !== 2 && !compactedRooms.has(online.code)) {
+  if (IS_XFILES && online?.active && data.room?.host && (state.playerLayout || 0) < GameSetup.playerLayout && !compactedRooms.has(online.code)) {
     compactedRooms.add(online.code);
     onlineAction({ type: 'xfilesLayout' }).then(result => {
       if (result && activeZone === 'player') focusZone('player');
@@ -404,8 +404,8 @@ function freshState() {
 }
 
 function compactLocalPlayers(game) {
-  if (!IS_XFILES || game.playerLayout === 2) return;
-  try { localStorage.setItem('lex-web-before-player-layout-v2', JSON.stringify(game)); }
+  if (!IS_XFILES || game.playerLayout >= GameSetup.playerLayout) return;
+  try { localStorage.setItem('lex-web-before-player-layout-v' + GameSetup.playerLayout, JSON.stringify(game)); }
   catch { status('No se ha podido guardar una copia de la disposición anterior. La mesa se conserva.'); return; }
   GameSetup.compactPlayers(game);
 }

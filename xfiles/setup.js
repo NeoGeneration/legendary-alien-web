@@ -2,6 +2,7 @@
 
 // Workshop 3245264516: StartGame, SetupBureau, BuildSeason and player actions.
 const XFilesSetup = (() => {
+  const playerLayout = 3;
   let layout;
   function configure(data) {
     const mat = data.objects.find(o => o.type === 'playmat');
@@ -46,16 +47,16 @@ const XFilesSetup = (() => {
   const inPlayArea = (object, area) => area && object.type === 'stack'
     && Math.abs(object.x-area.x)<area.width/2 && Math.abs(object.z-area.z)<area.height/2;
   function compactPlayers(game) {
-    if (game.gameId !== 'xfiles' || game.playerLayout === 2) return false;
+    if (game.gameId !== 'xfiles' || game.playerLayout >= playerLayout) return false;
     const plans = [];
     for (let seat = 1; seat <= 5; seat++) {
       const area = seatZone(game, seat, 'play');
       if (!area) continue;
       const x = [0, -22, 22, -44, 44][seat-1];
-      const play = { x, z: -21, width: 16, height: 11 };
+      const play = { x, z: -23, width: 16, height: 11 };
       const bases = ['strikes', 'draw', 'avatar', 'discard'].map((zone, i) => {
         const object = seatZone(game, seat, zone);
-        return object && { object, old: { ...object }, next: { x: x-6+i*4, z: -10 } };
+        return object && { object, old: { ...object }, next: { x: x-6+i*4, z: -12 } };
       }).filter(Boolean);
       plans.push({ seat, area, old: { ...area }, play, bases, x });
     }
@@ -79,11 +80,11 @@ const XFilesSetup = (() => {
       for (const base of plan.bases) Object.assign(base.object, base.next);
       Object.assign(plan.area, plan.play);
       for (const object of game.objects.filter(o => o.type === 'counter' && o.playerId === plan.seat)) {
-        const z = { stars: -7, combat: -10, strikes: -13 }[object.resource];
+        const z = { stars: -9, combat: -12, strikes: -15 }[object.resource];
         if (z !== undefined) Object.assign(object, { x: plan.x-10, z });
       }
     }
-    game.playerLayout = 2;
+    game.playerLayout = playerLayout;
     return true;
   }
   const at = (game, p) => game.objects.filter(o => o.type === 'stack' && Math.abs(o.x - p.x) < 1.1 && Math.abs(o.z - p.z) < 1.5).sort((a, b) => (b.z_ || 0) - (a.z_ || 0));
@@ -255,6 +256,6 @@ const XFilesSetup = (() => {
     }
   }
   const bureauSlot = (object, game) => [1,2,3,4,5].find(n => Math.abs(object.x-position('Bureau'+n, game).x)<1.1 && Math.abs(object.z-position('Bureau'+n, game).z)<1.5);
-  return { configure, scenarios, heroes, avatars, create, draw, act, seatZone, bureauSlot, firstTurn, compactPlayers, inPlayArea };
+  return { configure, scenarios, heroes, avatars, create, draw, act, seatZone, bureauSlot, firstTurn, compactPlayers, inPlayArea, playerLayout };
 })();
 if (typeof module !== 'undefined') module.exports = XFilesSetup;
