@@ -1852,13 +1852,20 @@ if(IS_COLLECTION && GameSetup.avatars.length) {
 }
 function updateSetupSummary() {
   if (!initial) return;
-  const scenario = GameSetup.scenarios.find(s => s.id === $('#setup-scenario').value);
+  let scenario = GameSetup.scenarios.find(s => s.id === $('#setup-scenario').value);
   if (!scenario) return;
   if(IS_COLLECTION) {
     const players=Number($('#setup-players').value);
+    for(const option of $('#setup-scenario').options)option.disabled=players<(GameSetup.scenarios.find(s=>s.id===option.value)?.minPlayers||1);
+    if(players<(scenario.minPlayers||1)) {
+      scenario=GameSetup.scenarios.find(s=>players>=(s.minPlayers||1));
+      $('#setup-scenario').value=scenario.id;
+    }
     document.querySelectorAll('[data-collection-seat]').forEach(label=>{label.hidden=Number(label.dataset.collectionSeat)>players;});
     $('#setup-summary').textContent=GAME.id==='matrix'
       ? `Zion: 56 cartas · Dock: 5 cartas · Tres actos con ${[0,1,3,5,5][players-1]} cartas adicionales cada uno · Mano inicial: 6.`
+      : GAME.id==='bond' ? `${players===1?4:players<4?5:6} héroes · Q Branch: 5 cartas · Villanos en tres etapas y misión final · Mazo inicial: 13 cartas; mano: 6.`
+      : GAME.id==='marvel' ? `HQ: 5 cartas · Mano inicial: 6 · ${players===1?'Solitario clásico, con un Master Strike.':'Villanos y secuaces ajustados al grupo.'} Los héroes se eligen automáticamente; Cosmic Cube con Red Skull usa el equipo recomendado.`
       : 'Mesa manual. Trae los mazos desde Reserva y prepara el escenario según el reglamento. Cada jugador tiene su zona y su mano privada.';
     return;
   }
@@ -1877,9 +1884,10 @@ function updateSetupSummary() {
 $('#btn-setup').onclick = () => {
   if (!state) return;
   if (state.setup) {
-    $('#setup-scenario').value = state.setup.scenario;
+    $('#setup-scenario').value = GameSetup.scenarios.some(s=>s.id===state.setup.scenario)?state.setup.scenario:GameSetup.scenarios[0].id;
     $('#setup-players').value = state.setup.players;
     $('#setup-drones').checked = state.setup.expansionDrones;
+    if(GAME.id==='marvel')$('#marvel-mastermind').value=state.setup.mastermind||'889fb1';
     if(IS_COLLECTION && state.setup.avatars)state.setup.avatars.forEach((avatar,i)=>{$('#collection-avatar-'+(i+1)).value=avatar;});
     if (IS_XFILES) {
       document.querySelectorAll('#xf-heroes input').forEach(input => { input.checked = state.setup.heroes.includes(Number(input.value)); });
@@ -1911,6 +1919,7 @@ $('#setup-scenario').onchange = () => {
 $('#setup-form').onsubmit = async e => {
   e.preventDefault();
   const options = { scenario: $('#setup-scenario').value, players: Number($('#setup-players').value), expansionDrones: $('#setup-drones').checked };
+  if(GAME.id==='marvel')options.mastermind=$('#marvel-mastermind').value;
   if(IS_COLLECTION && GameSetup.avatars.length)options.avatars=Array.from({length:options.players},(_,i)=>$('#collection-avatar-'+(i+1)).value);
   if (IS_XFILES) Object.assign(options, {
     heroes: [...document.querySelectorAll('#xf-heroes input:checked')].map(input => Number(input.value)),

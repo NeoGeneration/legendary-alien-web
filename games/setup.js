@@ -1,8 +1,7 @@
 'use strict';
 
-// Shared table tools plus the setup port from Workshop 3232976645 (Matrix).
-// The other mods retain a manual library so their cards and expansion rules
-// remain usable without pretending to automate their individual effects.
+// Shared table tools and automatic scenario preparation. Card effects are
+// resolved by the players. Bond recipes are reviewed in build_bond_setup.py.
 const LegendarySetup = (() => {
   const titles = { matrix: 'THE MATRIX', bond: 'JAMES BOND', marvel: 'MARVEL LEGENDARY', predator: 'PREDATOR', firefly: 'FIREFLY' };
   const engines = new Map();
@@ -19,6 +18,20 @@ const LegendarySetup = (() => {
       {id:'matrix-1',title:'The Matrix',movie:1},
       {id:'matrix-2',title:'The Matrix Reloaded',movie:2},
       {id:'matrix-3',title:'The Matrix Revolutions',movie:3},
+    ] : id === 'bond' ? [
+      ['goldfinger','Goldfinger'],['golden-gun','The Man with the Golden Gun'],
+      ['casino-royale','Casino Royale'],['goldeneye','GoldenEye'],
+      ['ohmss','On Her Majesty’s Secret Service'],['licence-to-kill','Licence to Kill'],
+      ['spy-who-loved-me','The Spy Who Loved Me'],['no-time-to-die','No Time to Die'],['thunderball','Thunderball'],
+    ].map(([id,title])=>({id,title})) : id === 'marvel' ? [
+      {id:'cosmic-cube',title:'Unleash the Power of the Cosmic Cube',card:'marvel-846'},
+      {id:'bank-robbery',title:'Midtown Bank Robbery',card:'marvel-769',bystanders:12},
+      {id:'dark-portals',title:'Portals to the Dark Dimension',card:'marvel-845',twists:7},
+      {id:'legacy-virus',title:'The Legacy Virus',card:'marvel-839'},
+      {id:'killbots',title:'Replace Earth’s Leaders with Killbots',card:'marvel-777',twists:5,bystanders:18},
+      {id:'skrull-invasion',title:'Secret Invasion of the Skrull Shapeshifters',card:'marvel-750',heroes:6},
+      {id:'civil-war',title:'Super Hero Civil War · 2–5 jugadores',card:'marvel-743',minPlayers:2},
+      {id:'prison-breakout',title:'Negative Zone Prison Breakout · 2–5 jugadores',card:'marvel-840',minPlayers:2},
     ] : [{id:'manual',title:'Mesa libre · preparación manual'}];
     const avatars = id === 'matrix' ? [
       ['Neo1','Neo · The Matrix'],['Neo2','Neo · Reloaded'],['Neo3','Neo · Revolutions'],
@@ -74,8 +87,11 @@ const LegendarySetup = (() => {
     function create(initial,options,random=Math.random) {
       const scenario=scenarios.find(s=>s.id===options.scenario), players=Number(options.players);
       if (!scenario || !Number.isInteger(players)||players<1||players>5) throw new Error('Elige una preparación y entre uno y cinco jugadores.');
+      if(players<(scenario.minPlayers||1))throw new Error('Este escenario necesita al menos '+scenario.minPlayers+' jugadores.');
       const game=newGame(players);
       game.setup={scenario:scenario.id,title:scenario.title,players,turn:1};
+      if (id==='bond') return createBond(game,scenario,players,random);
+      if (id==='marvel') return createMarvel(game,scenario,players,options,random);
       if (id!=='matrix') return game;
       const movie=scenario.movie;
       const defaults=movie===1?['Neo1','Morpheus1','Trinity1','Switch','Mouse']:['Neo'+movie,'Morpheus2','Trinity2','Niobe','Roland'];
@@ -130,6 +146,133 @@ const LegendarySetup = (() => {
         const o=move(load(key),zone(key),true); Object.assign(o,{width:1.1,height:1.1});
       }
       prune(game);
+      return game;
+    }
+    function createMarvel(game,scenario,players,options,random) {
+      // First-edition Core rules and the scheme scripts in Workshop 1829020636.
+      // Classic solo uses one Master Strike and ignores Always Leads.
+      const masterminds=[
+        {key:'889fb1',villain:'5adbdf'}, {key:'f848b2',henchman:'7af677'},
+        {key:'7c91e7',villain:'9d6725'}, {key:'5da711',villain:'cb5efe'},
+      ];
+      const selected=options.mastermind||'889fb1';
+      const mastermind=selected==='random'?shuffle([...masterminds],random)[0]:masterminds.find(m=>m.key===selected);
+      if(!mastermind)throw new Error('Elige un Mastermind del juego base.');
+      const entry=key=>catalog().find(o=>o.key===key);
+      const take=(key,count)=>{
+        if(game.libraryTaken.includes(key))throw new Error('Mazo repetido en la preparación.');
+        const source=entry(key);if(!source)throw new Error('Falta un mazo de Marvel: '+key);
+        game.libraryTaken.push(key);return copy(source.cards.slice(0,count));
+      };
+      const pick=(group,count,required=[])=>{
+        const pool=shuffle(catalog().filter(o=>o.group===group&&o.name.endsWith('(Core)')&&!required.includes(o.key)),random);
+        return [...required,...pool.slice(0,count-required.length).map(o=>o.key)];
+      };
+      const heroCount=scenario.heroes||(scenario.id==='civil-war'&&players===2?4:players===1?3:5);
+      const recommended=['5afc9d','969bbc','2e5e5e','c4e624','3df983'];
+      const heroes=scenario.id==='cosmic-cube'&&mastermind.key==='889fb1'?recommended.slice(0,heroCount):pick('Héroes',heroCount);
+      const heroDeck=shuffle(heroes.flatMap(key=>take(key)),random);
+      const requiredVillains=scenario.id==='skrull-invasion'?['a63d04']:[];
+      if(players>1&&mastermind.villain&&!requiredVillains.includes(mastermind.villain))requiredVillains.push(mastermind.villain);
+      const villainKeys=pick('Villanos',[1,2,3,3,4][players-1],requiredVillains);
+      const henchKeys=pick('Henchmen',(players>=4?2:1)+(scenario.id==='prison-breakout'?1:0),players>1&&mastermind.henchman?[mastermind.henchman]:[]);
+      const bystanders=take('eae6a5',30), twists=take('c82082',11), wounds=take('f49fdc',scenario.id==='legacy-virus'?players*6:30);
+      const twistCount=scenario.id==='civil-war'&&players>=4?5:scenario.twists||8;
+      const villainDeck=[...villainKeys.flatMap(key=>take(key)),...henchKeys.flatMap(key=>take(key,players===1?3:10)),
+        ...bystanders.splice(0,scenario.bystanders||[1,2,8,8,12][players-1]),
+        ...take('c7aaa3',players===1?1:5),...twists.splice(0,twistCount)];
+      if(scenario.id==='skrull-invasion')villainDeck.push(...heroDeck.splice(0,12));
+      const point=(x,y)=>({x:(x-1831/2)*20/1304,z:7+(1304/2-y)*20/1304});
+      const masterCards=take(mastermind.key);
+      add(game,'Mastermind',masterCards.splice(0,1),point(176,842),true);
+      add(game,'Mastermind Tactics',shuffle(masterCards,random),{x:-16,z:4});
+      const scheme=take('54a8c8').find(c=>c.uid===scenario.card);
+      if(!scheme)throw new Error('Falta la carta de Scheme.');
+      add(game,'Scheme',[scheme],point(176,472),true);
+      if(scenario.id==='killbots')add(game,'Killbots · Fuerza inicial',twists.splice(0,3),{x:-16,z:10},true);
+      add(game,'Wounds',wounds,point(1382,472),true);
+      add(game,'Bystanders',bystanders,point(1680,472),true);
+      add(game,'S.H.I.E.L.D. Officers',take('49f6ff',30),point(176,1160),true);
+      add(game,'Villain Deck',shuffle(villainDeck,random),point(1658,842));
+      for(const [i,x] of [490,700,912,1126,1340].entries())add(game,'HQ '+(i+1),heroDeck.splice(0,1),point(x,1160),true);
+      add(game,'Hero Deck',heroDeck,point(1658,1160));
+      for(const [i,key] of ['792aaa','763235','3536ec','5f46be','a9a627'].slice(0,players).entries()) {
+        add(game,'Mazo de jugador '+(i+1),shuffle(take(key),random),seatZone(game,i+1,'draw'));
+      }
+      Object.assign(game.setup,{mastermind:mastermind.key,heroes:heroes.map(key=>entry(key).name),villains:villainKeys.map(key=>entry(key).name),
+        henchmen:henchKeys.map(key=>entry(key).name),edition:'core-first',soloMode:players===1?'classic':null});
+      return game;
+    }
+    function createBond(game,scenario,players,random) {
+      const recipes=data.bondSetups, recipe=recipes?.find(r=>r.id===scenario.id);
+      if(!recipe) throw new Error('Falta la preparación de esta película. Recarga la página.');
+      const byUid=new Map(catalog().flatMap(o=>o.cards.map(c=>[c.uid,{card:c,key:o.key}]))), used=new Set();
+      const take=ids=>ids.map(uid=>{
+        const source=byUid.get(uid);
+        if(!source||used.has(uid))throw new Error('Carta de preparación no válida: '+uid);
+        used.add(uid);
+        if(!game.libraryTaken.includes(source.key))game.libraryTaken.push(source.key);
+        return copy(source.card);
+      });
+      const deckCards=key=>catalog().find(o=>o.key===key).cards.map(c=>c.uid);
+      const load=key=>take(deckCards(key));
+      const reserve=(name,cards,faceUp=false)=>add(game,name,cards,{x:-22+(reserve.slot++%10)*4.7,z:22},faceUp);
+      reserve.slot=0;
+      const helpers=recipes.slice(0,4).filter(r=>r!==recipe);
+      const groups=recipe.heroes.slice(0,players===1?4:5);
+      if(players>=4)groups.push(helpers[0].heroes.find(h=>!h.bond));
+      const heroCards=take(groups.flatMap(h=>h.cards));
+      if(recipe.gold)heroCards.push(...take(shuffle([...recipe.gold],random).slice(0,6)));
+      if(recipe.angels)heroCards.push(...take(recipe.angels));
+      shuffle(heroCards,random);
+      game.setup.heroes=groups.map(h=>h.name);
+      const gold=new Set(recipe.gold||[]), attached=[];
+      for(const [i,x] of [-10.13,-5.77,-1.42,2.98,7.43].entries()) {
+        while(heroCards.length&&gold.has(heroCards[0].uid))attached.push(heroCards.shift());
+        add(game,'Q Branch '+(i+1),heroCards.splice(0,1),{x,z:.1},true);
+      }
+      add(game,'Hero Deck',heroCards,{x:12.33,z:.14});
+      add(game,'Mastermind Tactics',shuffle(take(recipe.tactics),random),{x:-20,z:6.6});
+      add(game,'Mastermind',take(recipe.mastermind),{x:-15.18,z:6.61},true,{rot:recipe.submerged?0:180});
+      add(game,'Scheme',take(recipe.scheme),{x:-15.18,z:13.13},true);
+      if(attached.length)add(game,'Smuggled Gold · Mastermind',attached,{x:-20,z:2},true);
+      add(game,'Miss Moneypenny',load('cacece'),{x:-15.18,z:.14},true);
+      const wounds=load('be3a03');
+      if(recipe.wounds)wounds.push(...take(recipe.wounds));
+      add(game,'Wounds',shuffle(wounds,random),{x:7.34,z:13.13},!recipe.wounds);
+      const gadgets=load('ab749e');
+      if(recipe.gadgets)gadgets.push(...take(recipe.gadgets));
+      shuffle(gadgets,random);
+      const extraVillains=[0,0,1,1,2][players-1], villainGroups=[recipe,...helpers.slice(0,extraVillains)];
+      const villainCards=take(villainGroups.flatMap(r=>r.villains));
+      const missionCards=take(recipe.missions), inevitable=missionCards.filter(c=>c.bondStage==='I');
+      let henchIds=[...recipe.henchmen];
+      if(players===1)henchIds=['A','B','C'].map(stage=>shuffle(henchIds.filter(uid=>byUid.get(uid).card.bondStage===stage),random)[0]);
+      if(players>=4)henchIds.push(...helpers[0].henchmen);
+      const henchmen=take(henchIds), strikes=load('91a700'), twists=load('2164b3');
+      const gadgetCounts=[[0,0,0],[1,1,0],[3,3,2],[3,3,2],[4,4,4]][players-1];
+      const layers=['A','B','C'].map((stage,i)=>shuffle([
+        ...villainCards.filter(c=>c.bondStage===stage),...missionCards.filter(c=>c.bondStage===stage),
+        ...henchmen.filter(c=>c.bondStage===stage),...gadgets.splice(0,gadgetCounts[i]),
+        ...strikes.splice(0,(recipe.strikes||[1,2,2])[i]),...twists.splice(0,(recipe.twists||[1,2,2])[i]),
+      ],random));
+      game.setup.bondLayers=layers.map(cards=>cards.length);
+      game.setup.villains=villainGroups.map(r=>r.title);
+      add(game,'Villain Deck',[...layers.flat(),...inevitable],{x:12.33,z:6.61});
+      add(game,'Gadgets',gadgets,{x:12.33,z:13.13},!recipe.gadgets);
+      for(const extra of recipe.reserves||[]) {
+        const cards=take(extra.cards);if(extra.shuffle)shuffle(cards,random);
+        if(extra.name==='Nanobot Infection')add(game,extra.name,cards,{x:7.34,z:20},true);
+        else reserve(extra.name,cards,!!extra.faceUp);
+      }
+      const agents=['ef86e8','df5c5a','587458','fbebb7'].flatMap(deckCards), operatives=deckCards('ee16c8');
+      const special=shuffle([...recipe.starters],random);
+      for(let seat=1;seat<=players;seat++) {
+        const cards=take([...agents.splice(0,8),...operatives.splice(0,4),special.shift()]);
+        add(game,'Mazo de jugador '+seat,shuffle(cards,random),seatZone(game,seat,'draw'));
+      }
+      game.objects.push({type:'counter',id:game.nextId++,name:'Peligro',resource:'danger',value:recipe.danger||0,
+        x:17,z:0,rot:180,scale:1,color:'#b1393b'});
       return game;
     }
     function firstTurn(selected,seats=selected.map((_,i)=>i+1)) {

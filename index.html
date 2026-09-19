@@ -97,6 +97,9 @@
         <option value="3">3 jugadores</option><option value="4">4 jugadores</option><option value="5">5 jugadores</option>
       </select>
       <label id="setup-drones-label" class="setup-check"><input id="setup-drones" type="checkbox" checked> Incluir drones de la expansión</label>
+      <label id="marvel-mastermind-label" hidden>Mastermind
+        <select id="marvel-mastermind"><option value="889fb1">Red Skull</option><option value="f848b2">Dr. Doom</option><option value="7c91e7">Loki</option><option value="5da711">Magneto</option><option value="random">Al azar</option></select>
+      </label>
       <div id="xfiles-setup" hidden>
         <div id="xfiles-seasons" hidden>
           <label>Primera etapa <select id="xf-season-1"><option value="1">Temporada 1</option><option value="4">Temporada 4</option><option value="7">Temporada 7</option></select></label>
@@ -141,7 +144,7 @@
     <section id="collection-help" hidden>
       <h2>Tu colección Legendary</h2>
       <p>Reserva contiene los mazos y expansiones. Busca por nombre y pulsa Añadir para traer un mazo a la mesa. Cada mazo se añade una vez; puedes deshacerlo.</p>
-      <p>Matrix prepara automáticamente la película y los personajes. En los demás juegos, la preparación del escenario es manual: coloca y mezcla los mazos según su reglamento. Turno permite robar, jugar la mano y descartarla al terminar.</p>
+      <p>Matrix y James Bond preparan automáticamente la película y los mazos. Marvel prepara los ocho Schemes del juego base; Civil War y Prison Breakout necesitan dos o más jugadores. Sus expansiones y los escenarios de Predator y Firefly se preparan desde Reserva siguiendo el reglamento. Turno permite robar, jugar la mano y descartarla al terminar.</p>
       <div id="collection-rules"></div>
     </section>
     <section id="backup-tools" aria-labelledby="backup-title">
@@ -201,8 +204,8 @@
       <a data-game="alien" href="?game=alien"><strong>ALIEN</strong><span>Escenarios y expansiones</span></a>
       <a data-game="xfiles" href="?game=xfiles"><strong>X-FILES</strong><span>Temporadas 1–9 · Solo y con amigos</span></a>
       <a data-game="matrix" href="?game=matrix"><strong>THE MATRIX</strong><span>Tres películas · Preparación automática</span></a>
-      <a data-game="bond" href="?game=bond"><strong>JAMES BOND</strong><span>007 y expansiones · Mesa manual</span></a>
-      <a data-game="marvel" href="?game=marvel"><strong>MARVEL LEGENDARY</strong><span>Héroes, villanos y expansiones · Mesa manual</span></a>
+      <a data-game="bond" href="?game=bond"><strong>JAMES BOND</strong><span>Nueve películas · Preparación automática</span></a>
+      <a data-game="marvel" href="?game=marvel"><strong>MARVEL LEGENDARY</strong><span>Tapete clásico · Juego base automático</span></a>
       <a data-game="predator" href="?game=predator"><strong>PREDATOR</strong><span>Humanos y cazadores · Mesa manual</span></a>
       <a data-game="firefly" href="?game=firefly"><strong>FIREFLY</strong><span>Tripulación, episodios y Serenity · Mesa manual</span></a>
     </div>
@@ -235,12 +238,12 @@
 </div>
 <script src="setup.js?v=7"></script>
 <script src="xfiles/setup.js?v=5"></script>
-<script src="games/setup.js?v=1"></script>
-<script src="game-config.js?v=2"></script>
+<script src="games/setup.js?v=2"></script>
+<script src="game-config.js?v=3"></script>
 <script src="multiplayer-config.js?v=1"></script>
 <script src="access.js?v=1"></script>
 <script src="multiplayer.js?v=9"></script>
 <script src="backup.js?v=3"></script>
-<script src="app.js?v=26"></script>
+<script src="app.js?v=27"></script>
 </body>
 </html>
