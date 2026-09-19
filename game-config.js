@@ -30,7 +30,7 @@ if (window.AlienGame.collection) {
   document.querySelector('#setup-description').textContent = game === 'matrix'
     ? 'Prepara la película, los tres actos, Zion, Dock y los personajes. Reparte seis cartas a cada jugador conectado.'
     : game === 'bond' ? 'Elige una película. Prepara el Mastermind, Scheme, villanos por etapas, Q Branch y los mazos de jugador. Reparte seis cartas a cada jugador conectado.'
-    : game === 'marvel' ? 'Prepara los ocho Schemes y cuatro Masterminds del juego base original, con héroes y enemigos según los jugadores. Solitario clásico. Las expansiones siguen disponibles en Reserva.'
+    : game === 'marvel' ? 'Preparación automática de los 175 Schemes y 100 Masterminds del mod, con 285 héroes y las reservas de las expansiones. Puedes elegir dificultad Epic y solitario clásico o avanzado.'
     : 'Abre la mesa y usa Reserva para traer los mazos del juego y sus expansiones. Sigue el reglamento para preparar el escenario.';
   document.querySelector('#turn-note').textContent = 'Los efectos, costes y avances de enemigos se resuelven manualmente. Terminar turno descarta la mano y las cartas jugadas, roba seis y reinicia Combate y Estrellas.';
   for (const button of document.querySelectorAll('[data-xf-command="gain"], [data-xf-command="conspiracy"]')) button.hidden = true;
