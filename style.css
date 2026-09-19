@@ -131,6 +131,9 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--accent
 .modal-head button { flex-shrink: 0; }
 #modal-body { overflow: auto; padding: 12px; display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
 #modal-body img { width: 100%; border-radius: 6px; cursor: pointer; }
+.deck-card { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.deck-card img { display: block; }
+.deck-card button { width: 100%; min-height: 44px; margin-top: auto; }
 #reserve-dialog .modal-box { max-width: 640px; }
 .reserve-tools { padding: 14px 16px; border-bottom: 1px solid var(--line); flex-shrink: 0; }
 .reserve-tools label { display: block; margin-bottom: 6px; font-weight: 600; }

@@ -265,7 +265,7 @@ function applyRemote(data) {
   if (!handChanged) next.hand = state.hand;
   state = next;
   const ids = new Set(next.objects.map(o => o.id));
-  for (const [id, el] of els) if (!ids.has(id)) { el.remove(); els.delete(id); }
+  for (const [id, el] of els) if (!ids.has(id)) { reserveArtObserver?.unobserve(el); el.remove(); els.delete(id); }
   for (const o of next.objects) if (previous.get(o.id) !== o) renderObj(o);
   zTop = Math.max(1, ...next.objects.map(o => o.z_ || 0));
   if (handChanged) renderHand();
@@ -463,7 +463,18 @@ function migratePlayerCounters() {
 }
 
 // ---------- Render ----------
+let visibleReserveArt = new WeakSet();
+const reserveArtObserver = typeof IntersectionObserver === 'undefined' ? null : new IntersectionObserver(entries => {
+  for (const {target, isIntersecting} of entries) {
+    if (!target.dataset.reserveArt) continue;
+    if (isIntersecting) visibleReserveArt.add(target); else visibleReserveArt.delete(target);
+    target.style.backgroundImage = isIntersecting ? target.dataset.reserveArt : '';
+  }
+}, {root:viewport, rootMargin:'200px'});
+
 function renderAll() {
+  reserveArtObserver?.disconnect();
+  visibleReserveArt = new WeakSet();
   world.innerHTML = '';
   els.clear();
   zTop = Math.max(1, ...state.objects.map(o => o.z_ || 0));
@@ -513,7 +524,16 @@ function renderObj(o) {
   if (o.type === 'stack') {
     if (!o.cards.length) { removeObj(o.id); return; }
     const top = o.cards[0];
-    el.style.backgroundImage = `url("${o.faceUp ? top.face : top.back}")`;
+    const art = `url("${o.faceUp ? top.face : top.back}")`;
+    if (reserveArtObserver && o.libraryReserve && isReserveStack(o)) {
+      el.dataset.reserveArt = art;
+      el.style.backgroundImage = visibleReserveArt.has(el) ? art : '';
+      reserveArtObserver.observe(el);
+    } else {
+      reserveArtObserver?.unobserve(el);
+      delete el.dataset.reserveArt;
+      el.style.backgroundImage = art;
+    }
     el.style.transform = `rotate(${o.rot - 180}deg)`;
     el.classList.toggle('deck', o.cards.length > 1);
     if (o.cards.length > 1) {
@@ -597,6 +617,7 @@ function renderObj(o) {
 function removeObj(id) {
   state.objects = state.objects.filter(o => o.id !== id);
   const el = els.get(id);
+  if (el) reserveArtObserver?.unobserve(el);
   if (el) el.remove();
   els.delete(id);
   if (hoverId === id) hoverId = null;
@@ -703,7 +724,7 @@ function reserveEntries(query = '') {
   const normalize = text => text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   const words = normalize(query).trim().split(/\s+/);
   const entries=IS_COLLECTION ? [
-    ...state.objects.filter(o=>o.type==='stack').map(o=>({id:o.id,name:o.name||'Mazo',translation:'',group:0,count:o.cards.length})),
+    ...state.objects.filter(o=>o.type==='stack').map(o=>({id:o.id,name:o.name||'Mazo',translation:isReserveStack(o)&&o.libraryReserve?'Fuera de partida':'',group:isReserveStack(o)?reserveInfo(o).group:0,count:o.cards.length})),
     ...GameSetup.catalog().filter(o=>!state.libraryTaken?.includes(o.key)).map(o=>({key:o.key,count:o.cards.length,...reserveInfo(o)})),
   ] : state.objects.filter(isReserveStack).map(o => ({ id: o.id, count: o.cards.length, ...reserveInfo(o) }));
   return entries
@@ -775,6 +796,7 @@ function openReserve() {
   $('#reserve-search').value = '';
   reserveLimit=80;
   $('#reserve-dialog').hidden = false;
+  $('#reserve-add-all').hidden = GAME.id!=='marvel' || state.marvelReservesVersion===1;
   refreshReserve();
   $('#reserve-close').focus({ preventScroll: true });
 }
@@ -956,12 +978,21 @@ function openSearch(o, revealed = null) {
   const body = $('#modal-body');
   body.innerHTML = '';
   (revealed || o.cards).forEach((card, i) => {
+    const item = document.createElement('div');
+    item.className = 'deck-card';
     const img = document.createElement('img');
     img.src = card.face;
     img.alt = card.name || `Carta ${i + 1}`;
     img.tabIndex = 0;
     img.setAttribute('role', 'button');
-    img.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); img.click(); } };
+    img.setAttribute('aria-label', `Robar ${img.alt}`);
+    img.onkeydown = e => {
+      if (e.key === 'Enter') { e.preventDefault(); if (!e.repeat) img.onclick(e); }
+      if (e.key === ' ' || e.code === 'Space') {
+        e.preventDefault();
+        if (!e.repeat) openCardZoom(card, true, 0, true);
+      }
+    };
     img.onclick = e => {
       if (online?.active) {
         onlineAction({ type: 'searchTake', id: o.id, uid: card.uid, toTable: e.shiftKey }).then(result => {
@@ -977,7 +1008,12 @@ function openSearch(o, revealed = null) {
       renderAll();
       if (o.cards.length) openSearch(o);
     };
-    body.appendChild(img);
+    const zoom = document.createElement('button');
+    zoom.textContent = 'Ampliar';
+    zoom.setAttribute('aria-label', `Ampliar ${img.alt}`);
+    zoom.onclick = () => openCardZoom(card);
+    item.append(img, zoom);
+    body.appendChild(item);
   });
   $('#modal').hidden = false;
 }
@@ -1655,6 +1691,22 @@ document.querySelectorAll('#zones [data-zone]').forEach(b => { b.onclick = () =>
 $('#reserve-close').onclick = closeReserve;
 $('#reserve-search').oninput = () => {reserveLimit=80;refreshReserve();};
 $('#reserve-table').onclick = () => { closeReserve(); focusZone('reserve'); };
+$('#reserve-add-all').onclick = async () => {
+  if(libraryPending) return;
+  libraryPending=true;
+  $('#reserve-add-all').disabled=true;
+  try {
+    if(online?.active) {
+      if(!await onlineAction({type:'legendary',command:'reserves'}))return;
+    } else {
+      const next=clone(state);
+      const message=GameSetup.act(next,next.hand,1,{command:'reserves'});
+      pushUndo();state=next;renderAll();status(message);
+    }
+    closeReserve();focusZone('reserve');
+  } catch(error) {status(error.message);}
+  finally {libraryPending=false;$('#reserve-add-all').disabled=false;}
+};
 $('#zoom-in').onclick = () => zoomAt(viewport.clientWidth / 2, viewport.clientHeight / 2, view.zoom * 1.4);
 $('#zoom-out').onclick = () => zoomAt(viewport.clientWidth / 2, viewport.clientHeight / 2, view.zoom / 1.4);
 $('#inspector-close').onclick = closeInspector;
@@ -1867,10 +1919,16 @@ function updateSetupSummary() {
       $('#setup-scenario').value=scenario.id;
     }
     document.querySelectorAll('[data-collection-seat]').forEach(label=>{label.hidden=Number(label.dataset.collectionSeat)>players;});
+    if(GAME.id==='marvel') {
+      const heroes=scenario.heroes||(scenario.id==='civil-war'&&players===2?4:players===1?3:players===5?6:5);
+      const bystanders=scenario.bystanders||[1,2,8,8,12][players-1];
+      const twists=scenario.id==='civil-war'&&players>=4?5:scenario.twists||8;
+      $('#setup-summary').textContent=`Juego base original · ${heroes} grupos de héroes · HQ: 5 · Bystanders: ${30-bystanders} en reserva + ${bystanders} en el mazo de villanos · ${twists} Scheme Twists en el mazo${scenario.id==='killbots'?' + 3 junto al Scheme':''} · Wounds: ${scenario.id==='legacy-virus'?6*players:30} · Mano: 6. ${players===1?'Solitario clásico: 1 Master Strike; se ignora Always Leads.':'Se respeta Always Leads del Mastermind.'} El resto de la colección queda alrededor, fuera de partida.`;
+      return;
+    }
     $('#setup-summary').textContent=GAME.id==='matrix'
       ? `Zion: 56 cartas · Dock: 5 cartas · Tres actos con ${[0,1,3,5,5][players-1]} cartas adicionales cada uno · Mano inicial: 6.`
       : GAME.id==='bond' ? `${players===1?4:players<4?5:6} héroes · Q Branch: 5 cartas · Villanos en tres etapas y misión final · Mazo inicial: 13 cartas; mano: 6.`
-      : GAME.id==='marvel' ? `HQ: 5 cartas · Mano inicial: 6 · ${players===1?'Solitario clásico, con un Master Strike.':'Villanos y secuaces ajustados al grupo.'} Los héroes se eligen automáticamente; Cosmic Cube con Red Skull usa el equipo recomendado.`
       : 'Mesa manual. Trae los mazos desde Reserva y prepara el escenario según el reglamento. Cada jugador tiene su zona y su mano privada.';
     return;
   }

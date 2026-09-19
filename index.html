@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0b0f0e">
 <title>Legendary Encounters: Alien — Mesa</title>
-<link rel="stylesheet" href="style.css?v=21">
+<link rel="stylesheet" href="style.css?v=22">
 </head>
 <body class="access-locked">
 <main id="app-access">
@@ -178,6 +178,7 @@
     <ul>
       <li><b>Un clic o toque</b> en un mazo: selecciona solo la carta superior. <b>Doble clic o doble toque</b>: selecciona el mazo entero. Después toca el destino.</li>
       <li><b>Acciones:</b> selecciona una carta o mazo y pulsa «Acciones» para ampliar, voltear, barajar o robar. Las cartas boca abajo siguen ocultas.</li>
+      <li><b>Ver cartas:</b> pulsa «Ampliar» debajo de una carta para leerla y volver al mismo mazo al cerrar. Tocar la imagen roba esa carta; con el foco en ella, mantén Espacio para ampliarla.</li>
       <li><b>Mantén Espacio</b> con el ratón sobre una carta, o con una carta seleccionada, para ampliarla. Suelta la tecla para cerrar. También funciona en la mano.</li>
       <li><b>Ampliar:</b> muestra solo la carta, sin marco. Si usas el botón, toca fuera de la carta, pulsa × o Escape para cerrar. Ambas formas conservan su orientación y la disposición de la mesa.</li>
       <li><b>Colocar:</b> elige «Colocar en mesa» y toca el destino. También puedes arrastrar cartas.</li>
@@ -219,6 +220,7 @@
       <input id="reserve-search" type="search" placeholder="Syndicate, temporada, evidencia…" autocomplete="off">
       <p>Toca el nombre para abrir sus acciones sin revelar las cartas.</p>
       <button id="reserve-table">Ver reserva en la mesa</button>
+      <button id="reserve-add-all" hidden>Poner toda la colección en la mesa</button>
     </div>
     <div id="reserve-list"></div>
   </div>
@@ -238,12 +240,12 @@
 </div>
 <script src="setup.js?v=7"></script>
 <script src="xfiles/setup.js?v=5"></script>
-<script src="games/setup.js?v=2"></script>
-<script src="game-config.js?v=3"></script>
+<script src="games/setup.js?v=3"></script>
+<script src="game-config.js?v=4"></script>
 <script src="multiplayer-config.js?v=1"></script>
 <script src="access.js?v=1"></script>
 <script src="multiplayer.js?v=9"></script>
 <script src="backup.js?v=3"></script>
-<script src="app.js?v=28"></script>
+<script src="app.js?v=29"></script>
 </body>
 </html>

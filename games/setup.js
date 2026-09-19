@@ -61,7 +61,7 @@ const LegendarySetup = (() => {
       game.libraryTaken ||= [];
       if (game.libraryTaken.includes(key)) throw new Error('Ese mazo ya está en la mesa. Usa la búsqueda de Reserva para localizarlo.');
       const current=game.objects.flatMap(o=>o.cards||[]).length+game.hand.length;
-      if (current+source.cards.length>4000) throw new Error('La mesa está llena. Retira mazos que ya no necesites antes de añadir más.');
+      if (current+source.cards.length>(id==='marvel'?10000:4000)) throw new Error('La mesa está llena. Retira mazos que ya no necesites antes de añadir más.');
       const n=game.libraryTaken.length;
       game.libraryTaken.push(key);
       return add(game,source.name,copy(source.cards),p||{x:-22+(n%11)*4.5,z:24+Math.floor(n/11)*5},source.faceUp,
@@ -93,6 +93,8 @@ const LegendarySetup = (() => {
       if (id==='bond') return createBond(game,scenario,players,random);
       if (id==='marvel') return createMarvel(game,scenario,players,options,random);
       if (id!=='matrix') return game;
+      if(data.matrixCardVersion!==2) throw new Error('Recarga la página para actualizar las cartas de Matrix.');
+      game.setup.matrixVersion=2;
       const movie=scenario.movie;
       const defaults=movie===1?['Neo1','Morpheus1','Trinity1','Switch','Mouse']:['Neo'+movie,'Morpheus2','Trinity2','Niobe','Roland'];
       const selected=(options.avatars||defaults).slice(0,players);
@@ -132,7 +134,9 @@ const LegendarySetup = (() => {
       for(let seat=1;seat<=players;seat++) {
         move(load(selected[seat-1]),seatZone(game,seat,'avatar'),true);
         const deck=load(starters[seat-1].key);
-        if(selected[seat-1]!=='Neo1') deck.cards.push(...load(pills[seat-1].key).cards.splice(0));
+        const freeYourMind=load(pills[seat-1].key);
+        if(selected[seat-1]!=='Neo1') deck.cards.push(...freeYourMind.cards.splice(0));
+        else { freeYourMind.faceUp=true; freeYourMind.name='Free Your Mind · Jugador '+seat+' · Fuera de juego'; }
         shuffle(deck.cards,random); move(deck,seatZone(game,seat,'draw')); deck.name='Mazo de jugador '+seat;
         const figure=load(selected[seat-1].replace(/\d$/,'')+'Standee');
         move(figure,zone(selected[seat-1]==='Neo1'?'InTheMatrix':'TheRealWorld'+seat),true);
@@ -168,8 +172,8 @@ const LegendarySetup = (() => {
         const pool=shuffle(catalog().filter(o=>o.group===group&&o.name.endsWith('(Core)')&&!required.includes(o.key)),random);
         return [...required,...pool.slice(0,count-required.length).map(o=>o.key)];
       };
-      const heroCount=scenario.heroes||(scenario.id==='civil-war'&&players===2?4:players===1?3:5);
-      const recommended=['5afc9d','969bbc','2e5e5e','c4e624','3df983'];
+      const heroCount=scenario.heroes||(scenario.id==='civil-war'&&players===2?4:players===1?3:players===5?6:5);
+      const recommended=['5afc9d','969bbc','2e5e5e','c4e624','3df983','7ba7ad'];
       const heroes=scenario.id==='cosmic-cube'&&mastermind.key==='889fb1'?recommended.slice(0,heroCount):pick('Héroes',heroCount);
       const heroDeck=shuffle(heroes.flatMap(key=>take(key)),random);
       const requiredVillains=scenario.id==='skrull-invasion'?['a63d04']:[];
@@ -201,7 +205,51 @@ const LegendarySetup = (() => {
       }
       Object.assign(game.setup,{mastermind:mastermind.key,heroes:heroes.map(key=>entry(key).name),villains:villainKeys.map(key=>entry(key).name),
         henchmen:henchKeys.map(key=>entry(key).name),edition:'core-first',soloMode:players===1?'classic':null});
+      addMarvelReserves(game,true);
       return game;
+    }
+    function addMarvelReserves(game,fromSetup=false) {
+      if(id!=='marvel'||game.gameId!=='marvel')throw new Error('Esta colección es de Marvel.');
+      if(game.marvelReservesVersion===1)return 0;
+      game.libraryTaken ||= [];
+      const existing=new Set([...game.hand,...game.objects.flatMap(o=>o.cards||[])].map(c=>c.uid));
+      const scenario=scenarios.find(s=>s.id===game.setup?.scenario);
+      // Older Core setups consumed the Scheme collection but retained only
+      // the chosen Scheme. Recover the unused Schemes, never the active one,
+      // even when that card has since moved to a private hand or been removed.
+      if(scenario?.card)existing.add(scenario.card);
+      const groups=['Reservas','Horrores y ambiciones','Transformaciones','Masterminds','Villanos','Henchmen','Héroes','Mazos iniciales'];
+      const sources=[...catalog()].sort((a,b)=>groups.indexOf(a.group)-groups.indexOf(b.group)||a.name.localeCompare(b.name,'es',{numeric:true}));
+      let z=Math.max(24,...game.objects.filter(o=>o.z>=19).map(o=>o.z+8)),group,slot=0,count=0;
+      game.nextId=Math.max(game.nextId,20000);
+      const occupiedIds=new Set(game.objects.map(o=>o.id));
+      const stableId=preferred=>{const id=occupiedIds.has(preferred)?game.nextId++:preferred;occupiedIds.add(id);return id;};
+      for(const [index,source] of sources.entries()) {
+        if(group!==source.group) {
+          if(group!==undefined)z+=Math.ceil(slot/20)*5.8+4;
+          group=source.group;slot=0;
+        }
+        const point={x:-42+(slot%20)*4.5,z:z+4+Math.floor(slot/20)*5.8};slot++;
+        const taken=game.libraryTaken.includes(source.key);
+        const unusedSchemes=source.key==='54a8c8'&&game.setup?.edition==='core-first';
+        // Existing games may have discarded/deleted/privately held cards.
+        // Never refill an already claimed deck from its source collection.
+        if(taken&&!fromSetup&&!unusedSchemes)continue;
+        const cards=copy(source.cards.filter(c=>!existing.has(c.uid)));
+        if(!cards.length)continue;
+        const headingKey='marvel-reserve-'+source.group;
+        if(!game.objects.some(o=>o.key===headingKey)) {
+          game.objects.push({type:'text',id:stableId(19000+groups.indexOf(group)),key:headingKey,name:group,text:group.toUpperCase(),fontSize:40,x:-42,z:z-0.5,rot:0,scale:1});
+        }
+        add(game,source.name+(taken?' · Restantes':''),cards,point,true,
+          {id:stableId(10000+index),z_:2000+index,key:source.key,group:source.group,libraryReserve:true});
+        count++;
+        for(const c of cards)existing.add(c.uid);
+        if(!taken)game.libraryTaken.push(source.key);
+      }
+      game.nextId=Math.max(game.nextId,...game.objects.map(o=>o.id+1));
+      game.marvelReservesVersion=1;
+      return count;
     }
     function createBond(game,scenario,players,random) {
       const recipes=data.bondSetups, recipe=recipes?.find(r=>r.id===scenario.id);
@@ -283,6 +331,7 @@ const LegendarySetup = (() => {
     }
     function act(game,hand,seat,action,random=Math.random) {
       if (action.command==='library') { bring(game,action.key); return 'Mazo añadido a la reserva'; }
+      if (action.command==='reserves') return addMarvelReserves(game)+' mazos añadidos alrededor del tapete';
       if (!game.setup || seat<1||seat>game.setup.players) throw new Error('Prepara la mesa para tu jugador.');
       if(action.command==='draw') {
         if(![1,6].includes(action.count))throw new Error('Puedes robar una o seis cartas.');
