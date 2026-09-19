@@ -1622,9 +1622,14 @@ addEventListener('keydown', e => {
     }
     return;
   }
-  const o = hoverId && byId(hoverId);
-  if (!o) return;
+  if (e.ctrlKey || e.metaKey || e.altKey || e.isComposing) return;
+  const hoveredObject = hoverId && byId(hoverId);
+  const o = hoveredObject?.type === 'stack' ? hoveredObject : (placement?.kind === 'stack' && byId(placement.id));
+  if (o?.type !== 'stack') return;
   const k = e.key.toLowerCase();
+  if (!['f','r','q','e','d','s'].includes(k) && !/^[1-9]$/.test(k)) return;
+  e.preventDefault();
+  if (e.repeat) return;
   if (k === 'f') flip(o);
   else if (k === 'r') doShuffle(o);
   else if (k === 'q') rotate(o, -90);
