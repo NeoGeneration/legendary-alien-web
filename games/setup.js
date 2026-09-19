@@ -39,7 +39,11 @@ const LegendarySetup = (() => {
       ['Trinity1','Trinity · The Matrix'],['Trinity2','Trinity · Reloaded / Revolutions'],
       ['Switch','Switch'],['Niobe','Niobe'],['Soren','Soren'],['Apoc','Apoc'],['Mouse','Mouse'],['Roland','Roland'],
     ].map(([id,name])=>({id,name})) : [];
-    const configure = source => { if (source.gameId !== id) throw new Error('Colección incorrecta.'); data=source; };
+    const configure = source => {
+      if (source.gameId !== id) throw new Error('Colección incorrecta.'); data=source;
+      if(id==='marvel'&&data.marvelSetups)for(const recipe of data.marvelSetups.schemes)
+        if(!scenarios.some(s=>s.id===recipe.id))scenarios.push(recipe);
+    };
     const catalog = () => data.objects.filter(o=>o.type==='stack');
     const seatZone = (game,seat,zone) => game.objects.find(o=>o.type==='player-zone'&&o.playerId===seat&&o.zone===zone);
     const inPlayArea = (o,area) => area && o.type==='stack' && Math.abs(o.x-area.x)<area.width/2 && Math.abs(o.z-area.z)<area.height/2;
@@ -91,7 +95,16 @@ const LegendarySetup = (() => {
       const game=newGame(players);
       game.setup={scenario:scenario.id,title:scenario.title,players,turn:1};
       if (id==='bond') return createBond(game,scenario,players,random);
-      if (id==='marvel') return createMarvel(game,scenario,players,options,random);
+      if (id==='marvel') {
+        const extended=options.collection==='all'||options.epic||options.soloMode==='advanced'||scenario.id.startsWith('scheme-')
+          || options.mastermind&&!['889fb1','f848b2','7c91e7','5da711','random'].includes(options.mastermind);
+        if(extended) {
+          const preparer=typeof module!=='undefined'?require('./marvel/setup.js'):MarvelSetup;
+          preparer.prepare({data,game,scenario:data.marvelSetups?.schemes.find(s=>s.id===scenario.id),players,options,random,add,seatZone,shuffle});
+          addMarvelReserves(game,true);return game;
+        }
+        return createMarvel(game,scenario,players,options,random);
+      }
       if (id!=='matrix') return game;
       if(data.matrixCardVersion!==2) throw new Error('Recarga la página para actualizar las cartas de Matrix.');
       game.setup.matrixVersion=2;
@@ -352,7 +365,7 @@ const LegendarySetup = (() => {
         const cards=[...hand.splice(0),...game.objects.filter(o=>inPlayArea(o,p)).flatMap(o=>o.cards.splice(0))]; prune(game);
         const existing=stacksAt(game,discard).find(o=>o.faceUp);
         if(existing)existing.cards.unshift(...cards);else add(game,'Descarte de jugador '+seat,cards,discard,true);
-        const n=draw(game,hand,seat,6,random);
+        const n=draw(game,hand,seat,game.setup.handSize||6,random);
         for(const o of game.objects)if(o.type==='counter'&&o.playerId===seat&&['combat','stars'].includes(o.resource))o.value=0;
         game.setup.turn=seat%game.setup.players+1;
         return 'Turno terminado · Robadas '+n;
@@ -360,7 +373,7 @@ const LegendarySetup = (() => {
       throw new Error('Acción no válida.');
     }
     const engine={configure,scenarios,avatars,catalog,newGame,create,act,draw,bring,seatZone,inPlayArea,firstTurn,
-      get rules(){return data?.rules||[];}};
+      get rules(){return data?.rules||[];},get marvel(){return data?.marvelSetups;}};
     engines.set(id,engine);return engine;
   }
   return {titles,forGame};

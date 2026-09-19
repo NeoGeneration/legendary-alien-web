@@ -379,6 +379,7 @@ async function load() {
     return r.json();
   });
   GameSetup.configure?.(data);
+  if(GAME.id==='marvel')populateMarvelSetup();
   if (IS_COLLECTION) {
     const links = $('#collection-rules'); links.innerHTML = '';
     for (const rule of GameSetup.rules) {
@@ -1910,6 +1911,20 @@ GameSetup.scenarios.forEach(scenario => {
   option.textContent = scenario.title;
   $('#setup-scenario').appendChild(option);
 });
+function populateMarvelSetup() {
+  if(!GameSetup.marvel)return;
+  const schemes=$('#setup-scenario'),masterminds=$('#marvel-mastermind');
+  const previous=schemes.value;schemes.innerHTML='';masterminds.innerHTML='';
+  for(const s of [...GameSetup.marvel.schemes].sort((a,b)=>a.title.localeCompare(b.title))) {
+    const option=document.createElement('option');option.value=s.id;option.textContent=s.title;schemes.appendChild(option);
+  }
+  schemes.value=GameSetup.marvel.schemes.some(s=>s.id===previous)?previous:'cosmic-cube';
+  for(const m of [{key:'random',name:'Al azar entre los compatibles'},...[...GameSetup.marvel.masterminds].sort((a,b)=>a.name.localeCompare(b.name))]) {
+    const option=document.createElement('option');option.value=m.key;option.textContent=m.name;masterminds.appendChild(option);
+  }
+  masterminds.value='889fb1';$('#marvel-options').hidden=false;
+  $('#marvel-supplies').value='expanded';$('#marvel-solo').value='classic';
+}
 if(IS_COLLECTION && GameSetup.avatars.length) {
   $('#collection-avatars').hidden=false;
   const defaults=['Neo1','Morpheus1','Trinity1','Switch','Mouse'];
@@ -1935,6 +1950,23 @@ function updateSetupSummary() {
     }
     document.querySelectorAll('[data-collection-seat]').forEach(label=>{label.hidden=Number(label.dataset.collectionSeat)>players;});
     if(GAME.id==='marvel') {
+      if(GameSetup.marvel) {
+        const recipe=GameSetup.marvel.schemes.find(s=>s.id===scenario.id);
+        const epic=$('#marvel-epic').checked;
+        for(const option of $('#marvel-mastermind').options) {
+          const m=GameSetup.marvel.masterminds.find(m=>m.key===option.value);
+          option.disabled=Boolean(m&&(MarvelSetup.compatible(recipe,m)||(epic&&!m.epic)));
+        }
+        const selected=GameSetup.marvel.masterminds.find(m=>m.key===$('#marvel-mastermind').value);
+        if(selected&&(MarvelSetup.compatible(recipe,selected)||(epic&&!selected.epic)))$('#marvel-mastermind').value='random';
+        const m=GameSetup.marvel.masterminds.find(m=>m.key===$('#marvel-mastermind').value);
+        const heroes=MarvelSetup.count(recipe.heroes,players,players===1?3:players===5?6:5)+MarvelSetup.count(recipe.extraHeroes,players)+(m?.extraHeroes||0);
+        const twists=recipe.special==='chthon'&&m?.key==='8ac205'?1:MarvelSetup.count(recipe.twists,players);
+        $('#marvel-solo-label').hidden=players!==1;
+        const solo=$('#marvel-solo').value==='advanced'?'Solitario avanzado: 5 Master Strikes.':'Solitario clásico: 1 Master Strike.';
+        $('#setup-summary').textContent=`Toda la colección: 175 Schemes · 100 Masterminds · 285 héroes. ${heroes} grupos de héroes · ${twists} Scheme Twists · HQ: ${recipe.hq||5}. ${players===1?solo+' Se ignora Always Leads salvo que la carta diga expresamente lo contrario.':'Se aplica Always Leads; las instrucciones del Scheme tienen prioridad.'} Se preparan los mazos adicionales y las reservas que pide este Scheme. El resto de las cartas queda alrededor, fuera de partida.`;
+        return;
+      }
       const heroes=scenario.heroes||(scenario.id==='civil-war'&&players===2?4:players===1?3:players===5?6:5);
       const bystanders=scenario.bystanders||[1,2,8,8,12][players-1];
       const twists=scenario.id==='civil-war'&&players>=4?5:scenario.twists||8;
@@ -1965,7 +1997,12 @@ $('#btn-setup').onclick = () => {
     $('#setup-scenario').value = GameSetup.scenarios.some(s=>s.id===state.setup.scenario)?state.setup.scenario:GameSetup.scenarios[0].id;
     $('#setup-players').value = state.setup.players;
     $('#setup-drones').checked = state.setup.expansionDrones;
-    if(GAME.id==='marvel')$('#marvel-mastermind').value=state.setup.mastermind||'889fb1';
+    if(GAME.id==='marvel') {
+      $('#marvel-mastermind').value=state.setup.mastermind||'889fb1';
+      $('#marvel-epic').checked=Boolean(state.setup.epic);
+      $('#marvel-solo').value=state.setup.soloMode||'classic';
+      $('#marvel-supplies').value=state.setup.supplies||'expanded';
+    }
     if(IS_COLLECTION && state.setup.avatars)state.setup.avatars.forEach((avatar,i)=>{$('#collection-avatar-'+(i+1)).value=avatar;});
     if (IS_XFILES) {
       document.querySelectorAll('#xf-heroes input').forEach(input => { input.checked = state.setup.heroes.includes(Number(input.value)); });
@@ -1986,6 +2023,7 @@ $('#btn-setup').onclick = () => {
 };
 $('#setup-close').onclick = () => { $('#setup').hidden = true; };
 $('#setup-players').onchange = updateSetupSummary;
+for(const selector of ['#marvel-mastermind','#marvel-epic','#marvel-supplies','#marvel-solo'])$(selector).onchange=updateSetupSummary;
 $('#setup-scenario').onchange = () => {
   if(IS_COLLECTION && GAME.id==='matrix') {
     const movie=GameSetup.scenarios.find(s=>s.id===$('#setup-scenario').value)?.movie||1;
@@ -1997,7 +2035,8 @@ $('#setup-scenario').onchange = () => {
 $('#setup-form').onsubmit = async e => {
   e.preventDefault();
   const options = { scenario: $('#setup-scenario').value, players: Number($('#setup-players').value), expansionDrones: $('#setup-drones').checked };
-  if(GAME.id==='marvel')options.mastermind=$('#marvel-mastermind').value;
+  if(GAME.id==='marvel')Object.assign(options,{mastermind:$('#marvel-mastermind').value,collection:'all',
+    epic:Boolean($('#marvel-epic').checked),supplies:$('#marvel-supplies').value||'expanded',soloMode:$('#marvel-solo').value||'classic'});
   if(IS_COLLECTION && GameSetup.avatars.length)options.avatars=Array.from({length:options.players},(_,i)=>$('#collection-avatar-'+(i+1)).value);
   if (IS_XFILES) Object.assign(options, {
     heroes: [...document.querySelectorAll('#xf-heroes input:checked')].map(input => Number(input.value)),
@@ -2014,7 +2053,7 @@ $('#setup-form').onsubmit = async e => {
   }
   try {
     const prepared = GameSetup.create(initial, options);
-    if (IS_COMPACT) GameSetup.draw(prepared, prepared.hand, 1, 6);
+    if (IS_COMPACT) GameSetup.draw(prepared, prepared.hand, 1, prepared.setup.handSize||6);
     pushUndo();
     cancelPlacement();
     closeInspector();

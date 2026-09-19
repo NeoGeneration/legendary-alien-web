@@ -1,7 +1,7 @@
 'use strict';
 const requestedGame = new URL(location.href).searchParams.get('game');
 window.AlienGame = Object.hasOwn(LegendarySetup.titles,requestedGame)
-  ? { id: requestedGame, title: LegendarySetup.titles[requestedGame], collection: true, data: `games/${requestedGame}/data.json?v=${requestedGame==='matrix'?3:2}`, saveKey: `legendary-${requestedGame}-state-v1`, previousKey: `legendary-${requestedGame}-before-import-v1` }
+  ? { id: requestedGame, title: LegendarySetup.titles[requestedGame], collection: true, data: `games/${requestedGame}/data.json?v=${['matrix','marvel'].includes(requestedGame)?3:2}`, saveKey: `legendary-${requestedGame}-state-v1`, previousKey: `legendary-${requestedGame}-before-import-v1` }
   : requestedGame === 'xfiles'
   ? { id: 'xfiles', title: 'X-FILES', data: 'xfiles/data.json?v=1', saveKey: 'lex-web-state-v1', previousKey: 'lex-web-before-import-v1' }
   : { id: 'alien', title: 'ALIEN', data: 'data.json?v=7', saveKey: 'lea-web-state-v1', previousKey: 'lea-web-before-import-v1' };

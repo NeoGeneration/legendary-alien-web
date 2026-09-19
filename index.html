@@ -100,6 +100,15 @@
       <label id="marvel-mastermind-label" hidden>Mastermind
         <select id="marvel-mastermind"><option value="889fb1">Red Skull</option><option value="f848b2">Dr. Doom</option><option value="7c91e7">Loki</option><option value="5da711">Magneto</option><option value="random">Al azar</option></select>
       </label>
+      <div id="marvel-options" hidden>
+        <label class="setup-check"><input id="marvel-epic" type="checkbox"> Versión Epic del Mastermind</label>
+        <label>Suministros
+          <select id="marvel-supplies"><option value="expanded">Incluir cartas especiales de las expansiones</option><option value="base">Bystanders, Wounds y Officers básicos</option></select>
+        </label>
+        <label id="marvel-solo-label">Solitario
+          <select id="marvel-solo"><option value="classic">Clásico · 1 Master Strike</option><option value="advanced">Avanzado (Dark City) · 5 Master Strikes</option></select>
+        </label>
+      </div>
       <div id="xfiles-setup" hidden>
         <div id="xfiles-seasons" hidden>
           <label>Primera etapa <select id="xf-season-1"><option value="1">Temporada 1</option><option value="4">Temporada 4</option><option value="7">Temporada 7</option></select></label>
@@ -240,12 +249,13 @@
 </div>
 <script src="setup.js?v=7"></script>
 <script src="xfiles/setup.js?v=5"></script>
-<script src="games/setup.js?v=3"></script>
-<script src="game-config.js?v=4"></script>
+<script src="games/marvel/setup.js?v=1"></script>
+<script src="games/setup.js?v=4"></script>
+<script src="game-config.js?v=5"></script>
 <script src="multiplayer-config.js?v=1"></script>
 <script src="access.js?v=1"></script>
 <script src="multiplayer.js?v=9"></script>
 <script src="backup.js?v=3"></script>
-<script src="app.js?v=30"></script>
+<script src="app.js?v=31"></script>
 </body>
 </html>
