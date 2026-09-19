@@ -273,9 +273,10 @@ html[data-game="xfiles"] { --accent: #a7d6e7; --surface: #111a20; --line: #30445
 html[data-game="matrix"] { --accent: #96ef90; }
 html[data-game="bond"] { --accent: #e4c47c; }
 html[data-game="marvel"] { --accent: #ff9494; }
+html[data-game="marvel2"] { --accent: #f4c46f; }
 html[data-game="predator"] { --accent: #dcdf7d; }
 html[data-game="firefly"] { --accent: #edb586; }
-html[data-game="marvel"] #game-name, html[data-game="bond"] #game-name { font-size: clamp(12px, 2.6vw, 22px); letter-spacing: .04em; }
+html[data-game="marvel"] #game-name, html[data-game="marvel2"] #game-name, html[data-game="bond"] #game-name { font-size: clamp(12px, 2.6vw, 22px); letter-spacing: .04em; }
 #collection-rules { display: flex; flex-wrap: wrap; gap: 12px; margin: 12px 0; }
 #collection-avatar-fields label { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 #collection-avatar-fields select { width: 65%; }

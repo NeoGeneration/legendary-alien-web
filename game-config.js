@@ -21,8 +21,8 @@ if (window.AlienGame.id === 'xfiles') {
 }
 if (window.AlienGame.collection) {
   const game = window.AlienGame.id;
-  document.querySelector('[data-zone="complex"]').textContent = {matrix:'Matrix',bond:'Assignment',marvel:'Ciudad',predator:'Wilds',firefly:'Verse'}[game];
-  document.querySelector('[data-zone="hq"]').textContent = {matrix:'Dock',bond:'Q Branch',marvel:'HQ',predator:'HQ',firefly:'Bridge'}[game];
+  document.querySelector('[data-zone="complex"]').textContent = {matrix:'Matrix',bond:'Assignment',marvel:'Ciudad',marvel2:'Ciudad',predator:'Wilds',firefly:'Verse'}[game];
+  document.querySelector('[data-zone="hq"]').textContent = {matrix:'Dock',bond:'Q Branch',marvel:'HQ',marvel2:'HQ',predator:'HQ',firefly:'Bridge'}[game];
   document.querySelector('#setup-drones-label').hidden = true;
   document.querySelector('#setup-players').value = '1';
   document.querySelector('#btn-turn').hidden = false;
@@ -31,8 +31,9 @@ if (window.AlienGame.collection) {
     ? 'Prepara la película, los tres actos, Zion, Dock y los personajes. Reparte seis cartas a cada jugador conectado.'
     : game === 'bond' ? 'Elige una película. Prepara el Mastermind, Scheme, villanos por etapas, Q Branch y los mazos de jugador. Reparte seis cartas a cada jugador conectado.'
     : game === 'marvel' ? 'Preparación automática de los 175 Schemes y 100 Masterminds del mod, con 285 héroes y las reservas de las expansiones. Puedes elegir dificultad Epic y solitario clásico o avanzado.'
+    : game === 'marvel2' ? 'Segunda Edición: 550 cartas, 9 Schemes y 5 Masterminds, con sus versiones Epic. Preparación según las reglas de esta edición y guardado independiente. Se usa el tapete clásico.'
     : 'Abre la mesa y usa Reserva para traer los mazos del juego y sus expansiones. Sigue el reglamento para preparar el escenario.';
   document.querySelector('#turn-note').textContent = 'Los efectos, costes y avances de enemigos se resuelven manualmente. Terminar turno descarta la mano y las cartas jugadas, roba seis y reinicia Combate y Estrellas.';
   for (const button of document.querySelectorAll('[data-xf-command="gain"], [data-xf-command="conspiracy"]')) button.hidden = true;
-  document.querySelector('#marvel-mastermind-label').hidden = game !== 'marvel';
+  document.querySelector('#marvel-mastermind-label').hidden = !['marvel','marvel2'].includes(game);
 }

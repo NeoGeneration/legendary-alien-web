@@ -3,7 +3,7 @@
 // Shared table tools and automatic scenario preparation. Card effects are
 // resolved by the players. Bond recipes are reviewed in build_bond_setup.py.
 const LegendarySetup = (() => {
-  const titles = { matrix: 'THE MATRIX', bond: 'JAMES BOND', marvel: 'MARVEL LEGENDARY', predator: 'PREDATOR', firefly: 'FIREFLY' };
+  const titles = { matrix: 'THE MATRIX', bond: 'JAMES BOND', marvel: 'MARVEL LEGENDARY', marvel2: 'MARVEL · 2ª EDICIÓN', predator: 'PREDATOR', firefly: 'FIREFLY' };
   const engines = new Map();
   const copy = value => JSON.parse(JSON.stringify(value));
   function shuffle(cards, random = Math.random) {
@@ -32,7 +32,7 @@ const LegendarySetup = (() => {
       {id:'skrull-invasion',title:'Secret Invasion of the Skrull Shapeshifters',card:'marvel-750',heroes:6},
       {id:'civil-war',title:'Super Hero Civil War · 2–5 jugadores',card:'marvel-743',minPlayers:2},
       {id:'prison-breakout',title:'Negative Zone Prison Breakout · 2–5 jugadores',card:'marvel-840',minPlayers:2},
-    ] : [{id:'manual',title:'Mesa libre · preparación manual'}];
+    ] : id==='marvel2' ? [] : [{id:'manual',title:'Mesa libre · preparación manual'}];
     const avatars = id === 'matrix' ? [
       ['Neo1','Neo · The Matrix'],['Neo2','Neo · Reloaded'],['Neo3','Neo · Revolutions'],
       ['Morpheus1','Morpheus · The Matrix'],['Morpheus2','Morpheus · Reloaded / Revolutions'],
@@ -43,6 +43,7 @@ const LegendarySetup = (() => {
       if (source.gameId !== id) throw new Error('Colección incorrecta.'); data=source;
       if(id==='marvel'&&data.marvelSetups)for(const recipe of data.marvelSetups.schemes)
         if(!scenarios.some(s=>s.id===recipe.id))scenarios.push(recipe);
+      if(data.modernSetups)scenarios.splice(0,scenarios.length,...data.modernSetups.schemes);
     };
     const catalog = () => data.objects.filter(o=>o.type==='stack');
     const seatZone = (game,seat,zone) => game.objects.find(o=>o.type==='player-zone'&&o.playerId===seat&&o.zone===zone);
@@ -94,6 +95,10 @@ const LegendarySetup = (() => {
       if(players<(scenario.minPlayers||1))throw new Error('Este escenario necesita al menos '+scenario.minPlayers+' jugadores.');
       const game=newGame(players);
       game.setup={scenario:scenario.id,title:scenario.title,players,turn:1};
+      if(data.modernSetups) {
+        const preparer=typeof module!=='undefined'?require('./modern/setup.js'):ModernLegendarySetup;
+        return preparer.prepare({data,game,scenario,players,options,random,add,seatZone,shuffle});
+      }
       if (id==='bond') return createBond(game,scenario,players,random);
       if (id==='marvel') {
         const extended=options.collection==='all'||options.epic||options.soloMode==='advanced'||scenario.id.startsWith('scheme-')
@@ -346,6 +351,10 @@ const LegendarySetup = (() => {
       if (action.command==='library') { bring(game,action.key); return 'Mazo añadido a la reserva'; }
       if (action.command==='reserves') return addMarvelReserves(game)+' mazos añadidos alrededor del tapete';
       if (!game.setup || seat<1||seat>game.setup.players) throw new Error('Prepara la mesa para tu jugador.');
+      if(action.command==='revealMastermind'&&data.modernSetups) {
+        const preparer=typeof module!=='undefined'?require('./modern/setup.js'):ModernLegendarySetup;
+        return preparer.revealMastermind({data,game,random,add,shuffle});
+      }
       if(action.command==='draw') {
         if(![1,6].includes(action.count))throw new Error('Puedes robar una o seis cartas.');
         return 'Robadas '+draw(game,hand,seat,action.count,random);
@@ -373,7 +382,7 @@ const LegendarySetup = (() => {
       throw new Error('Acción no válida.');
     }
     const engine={configure,scenarios,avatars,catalog,newGame,create,act,draw,bring,seatZone,inPlayArea,firstTurn,
-      get rules(){return data?.rules||[];},get marvel(){return data?.marvelSetups;}};
+      get rules(){return data?.rules||[];},get marvel(){return data?.marvelSetups;},get modern(){return data?.modernSetups;}};
     engines.set(id,engine);return engine;
   }
   return {titles,forGame};

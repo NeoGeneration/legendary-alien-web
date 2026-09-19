@@ -8,6 +8,7 @@ const TILE = 1;                     // lado de Custom_Tile a scale=1
 const GAME = window.AlienGame || { id: 'alien', title: 'ALIEN', data: 'data.json?v=7', saveKey: 'lea-web-state-v1', previousKey: 'lea-web-before-import-v1' };
 const IS_XFILES = GAME.id === 'xfiles';
 const IS_COLLECTION = Boolean(GAME.collection);
+const IS_MODERN = GAME.id==='marvel2';
 const IS_COMPACT = IS_XFILES || IS_COLLECTION;
 const GameSetup = IS_COLLECTION ? LegendarySetup.forGame(GAME.id) : IS_XFILES ? XFilesSetup : AlienSetup;
 const SAVE_KEY = GAME.saveKey;
@@ -380,6 +381,7 @@ async function load() {
   });
   GameSetup.configure?.(data);
   if(GAME.id==='marvel')populateMarvelSetup();
+  if(IS_MODERN)populateModernSetup();
   if (IS_COLLECTION) {
     const links = $('#collection-rules'); links.innerHTML = '';
     for (const rule of GameSetup.rules) {
@@ -1839,6 +1841,7 @@ function updateTurnUI() {
     ? `Turno del jugador ${state.setup.turn} · Tu zona: jugador ${seat} · ${state.hand.length} cartas en tu mano`
     : 'Pulsa Preparar para elegir la partida y los jugadores.';
   for (const button of document.querySelectorAll('[data-xf-command]')) {
+    if(button.dataset.xfCommand==='revealMastermind')button.hidden=!state?.setup?.hiddenMastermind;
     button.disabled = !state?.setup || Boolean(online?.active && !online.connected)
       || (IS_XFILES && button.dataset.xfCommand === 'endTurn' && state.setup.turn !== seat);
   }
@@ -1925,6 +1928,21 @@ function populateMarvelSetup() {
   masterminds.value='889fb1';$('#marvel-options').hidden=false;
   $('#marvel-supplies').value='expanded';$('#marvel-solo').value='classic';
 }
+function populateModernSetup() {
+  const meta=GameSetup.modern,schemes=$('#setup-scenario'),masters=$('#marvel-mastermind');
+  schemes.innerHTML='';masters.innerHTML='';
+  for(const s of meta.schemes) {
+    const option=document.createElement('option');option.value=s.id;option.textContent=s.title;schemes.appendChild(option);
+  }
+  schemes.value=meta.defaultScenario;
+  for(const m of [{key:'random',name:'Al azar'},...meta.masterminds]) {
+    const option=document.createElement('option');option.value=m.key;option.textContent=m.name;masters.appendChild(option);
+  }
+  masters.value=meta.defaultMastermind;
+  $('#marvel-options').hidden=false;$('#marvel-supplies').parentElement.hidden=true;$('#marvel-solo-label').hidden=true;
+  const reveal=document.createElement('button');reveal.textContent='Revelar Mastermind';reveal.dataset.xfCommand='revealMastermind';
+  reveal.onclick=()=>xfilesAction({command:'revealMastermind'});$('#turn-actions').appendChild(reveal);
+}
 if(IS_COLLECTION && GameSetup.avatars.length) {
   $('#collection-avatars').hidden=false;
   const defaults=['Neo1','Morpheus1','Trinity1','Switch','Mouse'];
@@ -1949,7 +1967,14 @@ function updateSetupSummary() {
       $('#setup-scenario').value=scenario.id;
     }
     document.querySelectorAll('[data-collection-seat]').forEach(label=>{label.hidden=Number(label.dataset.collectionSeat)>players;});
-    if(GAME.id==='marvel') {
+    if(IS_MODERN) {
+      const hidden=scenario.special==='bodyguards';
+      $('#marvel-mastermind').disabled=hidden;
+      const heroes=ModernLegendarySetup.count(scenario.heroes,players,[3,5,5,5,6][players-1])+(scenario.extraHeroes||0);
+      $('#setup-summary').textContent=`Segunda Edición · ${heroes} héroes · ${ModernLegendarySetup.count(scenario.twists,players)} Scheme Twists · 5 Master Strikes. ${players===1?'Solitario: 2 Henchmen en el mazo y 2 en la ciudad; se ignora Always Leads.':`${players+(scenario.extraVillains||0)} grupos de villanos. ${hidden?'El Mastermind se descubre durante la partida.':'Se respeta Always Leads.'}`} ${players>=4?'Warmup Round: no juegues carta del Villain Deck en el primer turno de cada jugador.':''} Las cartas restantes quedan alrededor del tapete. Partida independiente de Marvel original.`;
+      return;
+    }
+    if(GAME.id==='marvel'||IS_MODERN) {
       if(GameSetup.marvel) {
         const recipe=GameSetup.marvel.schemes.find(s=>s.id===scenario.id);
         const epic=$('#marvel-epic').checked;
@@ -1997,8 +2022,8 @@ $('#btn-setup').onclick = () => {
     $('#setup-scenario').value = GameSetup.scenarios.some(s=>s.id===state.setup.scenario)?state.setup.scenario:GameSetup.scenarios[0].id;
     $('#setup-players').value = state.setup.players;
     $('#setup-drones').checked = state.setup.expansionDrones;
-    if(GAME.id==='marvel') {
-      $('#marvel-mastermind').value=state.setup.mastermind||'889fb1';
+    if(GAME.id==='marvel'||IS_MODERN) {
+      $('#marvel-mastermind').value=state.setup.mastermind||(IS_MODERN?GameSetup.modern.defaultMastermind:'889fb1');
       $('#marvel-epic').checked=Boolean(state.setup.epic);
       $('#marvel-solo').value=state.setup.soloMode||'classic';
       $('#marvel-supplies').value=state.setup.supplies||'expanded';
@@ -2037,6 +2062,7 @@ $('#setup-form').onsubmit = async e => {
   const options = { scenario: $('#setup-scenario').value, players: Number($('#setup-players').value), expansionDrones: $('#setup-drones').checked };
   if(GAME.id==='marvel')Object.assign(options,{mastermind:$('#marvel-mastermind').value,collection:'all',
     epic:Boolean($('#marvel-epic').checked),supplies:$('#marvel-supplies').value||'expanded',soloMode:$('#marvel-solo').value||'classic'});
+  if(IS_MODERN)Object.assign(options,{mastermind:$('#marvel-mastermind').value,epic:Boolean($('#marvel-epic').checked)});
   if(IS_COLLECTION && GameSetup.avatars.length)options.avatars=Array.from({length:options.players},(_,i)=>$('#collection-avatar-'+(i+1)).value);
   if (IS_XFILES) Object.assign(options, {
     heroes: [...document.querySelectorAll('#xf-heroes input:checked')].map(input => Number(input.value)),
