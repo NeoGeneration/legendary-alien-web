@@ -7,7 +7,9 @@ const BOARD_H = 10;                 // alto de Custom_Board a scale=1
 const TILE = 1;                     // lado de Custom_Tile a scale=1
 const GAME = window.AlienGame || { id: 'alien', title: 'ALIEN', data: 'data.json?v=7', saveKey: 'lea-web-state-v1', previousKey: 'lea-web-before-import-v1' };
 const IS_XFILES = GAME.id === 'xfiles';
-const GameSetup = IS_XFILES ? XFilesSetup : AlienSetup;
+const IS_COLLECTION = Boolean(GAME.collection);
+const IS_COMPACT = IS_XFILES || IS_COLLECTION;
+const GameSetup = IS_COLLECTION ? LegendarySetup.forGame(GAME.id) : IS_XFILES ? XFilesSetup : AlienSetup;
 const SAVE_KEY = GAME.saveKey;
 const PRE_IMPORT_KEY = GAME.previousKey;
 // Shared illustrated bases. Keep these visual so existing saves and room
@@ -376,6 +378,13 @@ async function load() {
     return r.json();
   });
   GameSetup.configure?.(data);
+  if (IS_COLLECTION) {
+    const links = $('#collection-rules'); links.innerHTML = '';
+    for (const rule of GameSetup.rules) {
+      const link=document.createElement('a'); link.href=rule.url; link.textContent=rule.name;
+      link.target='_blank'; link.rel='noopener'; links.appendChild(link);
+    }
+  }
   initial = data.objects.map((o, i) => ({ ...o, id: i + 1, z_: i }));
   let saved = null;
   try { saved = JSON.parse(localStorage.getItem(SAVE_KEY)); } catch (e) { /* ignorar */ }
@@ -399,6 +408,7 @@ async function load() {
 }
 
 function freshState() {
+  if (IS_COLLECTION) return GameSetup.newGame();
   const game = { gameId: GAME.id, objects: clone(initial), hand: [], nextId: initial.length + 1, schemaVersion: 4 };
   if (IS_XFILES) GameSetup.compactPlayers(game);
   return game;
@@ -525,7 +535,7 @@ function renderObj(o) {
     el.style.transform = `rotate(${o.rot - 180}deg)`;
     if (o.type === 'player-zone') {
       if (o.labelOnly) el.dataset.zone = o.zone;
-      const zoneArt = IS_XFILES && o.labelOnly && PLAYER_ZONE_ART[o.zone];
+      const zoneArt = IS_COMPACT && o.labelOnly && PLAYER_ZONE_ART[o.zone];
       if (zoneArt) {
         const art = document.createElement('div');
         art.className = 'player-zone-art';
@@ -613,7 +623,7 @@ function fitObjects(objects, padding = 0) {
   if (!visible.length) return;
   const bounds = visible.map(o => {
     const size = sizeOf(o), a = (o.rot || 0) * Math.PI / 180;
-    const frame = IS_XFILES && o.type === 'player-zone' && o.labelOnly ? 1.42 : 1;
+    const frame = IS_COMPACT && o.type === 'player-zone' && o.labelOnly ? 1.42 : 1;
     const w = size.w * frame, h = size.h * frame;
     const dx = (Math.abs(w * Math.cos(a)) + Math.abs(h * Math.sin(a))) / 2;
     const dz = (Math.abs(w * Math.sin(a)) + Math.abs(h * Math.cos(a))) / 2;
@@ -631,6 +641,16 @@ function focusZone(zone) {
   activeZone = zone;
   document.querySelectorAll('[data-zone]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.zone === zone)));
   const mat = state.objects.find(o => o.type === 'playmat');
+  if (IS_COLLECTION && !['playmat','all'].includes(zone)) {
+    if (zone==='player') {
+      const seat=online?.room?.seat||1, area=GameSetup.seatZone(state,seat,'play');
+      fitObjects(state.objects.filter(o=>o.playerId===seat||GameSetup.inPlayArea(o,area)),.6);
+    } else if(zone==='reserve') {
+      const reserves=state.objects.filter(o=>o.type==='stack'&&o.z>=19);
+      if(reserves.length)fitObjects(reserves,1);else status('Abre Reserva para añadir mazos de la colección.');
+    } else if(mat) fitBounds(mat.x-mat.width/2,mat.x+mat.width/2,zone==='hq'?-3:4,zone==='hq'?5:17);
+    return;
+  }
   if (IS_XFILES && zone !== 'playmat' && zone !== 'all') {
     if (zone === 'complex') fitBounds(-7, 13, 10, 16.5);
     else if (zone === 'hq') fitBounds(-12, 18, -2, 4);
@@ -659,16 +679,19 @@ function manualView() {
 }
 
 // The reserve index uses public stack names only, never hidden card faces.
-const RESERVE_GROUPS = ['Apoyos y enemigos', 'Temporadas', 'Evidencias', 'Personajes de la Academia', 'Agentes', 'Mazos iniciales', 'Otros'];
+const RESERVE_GROUPS = IS_COLLECTION ? ['En la mesa','Actos','Personajes','Héroes','Villanos','Henchmen','Masterminds','Episodios','Avatares y roles','Mazos iniciales','Reservas','Transformaciones','Horrores y ambiciones','Fichas','Otros']
+  : ['Apoyos y enemigos', 'Temporadas', 'Evidencias', 'Personajes de la Academia', 'Agentes', 'Mazos iniciales', 'Otros'];
+let reserveLimit=80;
 const RESERVE_NAMES = {
   SyndaciteEnemy: ['Syndicate Enemy', 'Enemigos del Sindicato'],
   Informant: ['Informant', 'Informantes'], Lead: ['Lead', 'Pistas'],
   Cliffhanger: ['Cliffhanger', 'Cliffhangers'], EndGame: ['End Game', 'Finales'],
 };
 function isReserveStack(o) {
-  return IS_XFILES && o.type === 'stack' && o.cards.length > 0 && o.z >= 19;
+  return IS_COMPACT && o.type === 'stack' && o.cards.length > 0 && o.z >= 19;
 }
 function reserveInfo(o) {
+  if(IS_COLLECTION) return {name:o.name||'Mazo',translation:'',group:Math.max(0,RESERVE_GROUPS.indexOf(o.group||'Otros'))};
   const key = o.key || '';
   const [name, translation = ''] = RESERVE_NAMES[key] || [o.name || 'Mazo'];
   const group = RESERVE_NAMES[key] ? 0 : /^Season\d$/.test(key) ? 1
@@ -679,18 +702,22 @@ function reserveInfo(o) {
 function reserveEntries(query = '') {
   const normalize = text => text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   const words = normalize(query).trim().split(/\s+/);
-  return state.objects.filter(isReserveStack).map(o => ({ id: o.id, count: o.cards.length, ...reserveInfo(o) }))
+  const entries=IS_COLLECTION ? [
+    ...state.objects.filter(o=>o.type==='stack').map(o=>({id:o.id,name:o.name||'Mazo',translation:'',group:0,count:o.cards.length})),
+    ...GameSetup.catalog().filter(o=>!state.libraryTaken?.includes(o.key)).map(o=>({key:o.key,count:o.cards.length,...reserveInfo(o)})),
+  ] : state.objects.filter(isReserveStack).map(o => ({ id: o.id, count: o.cards.length, ...reserveInfo(o) }));
+  return entries
     .filter(entry => words.every(word => normalize(`${entry.name} ${entry.translation} ${RESERVE_GROUPS[entry.group]}`).includes(word)))
     .sort((a, b) => a.group - b.group || (a.name === 'Syndicate Enemy' ? -1 : b.name === 'Syndicate Enemy' ? 1 : a.name.localeCompare(b.name, 'es', { numeric: true })));
 }
 function refreshReserve() {
-  if (!IS_XFILES || $('#reserve-dialog').hidden) return;
+  if (!IS_COMPACT || $('#reserve-dialog').hidden) return;
   const body = $('#reserve-list');
   const focused = document.activeElement?.dataset.reserveAction;
   body.innerHTML = '';
   const entries = reserveEntries($('#reserve-search').value);
   let group = -1;
-  for (const entry of entries) {
+  for (const entry of entries.slice(0,reserveLimit)) {
     if (entry.group !== group) {
       group = entry.group;
       const heading = document.createElement('h3'); heading.textContent = RESERVE_GROUPS[group]; body.appendChild(heading);
@@ -699,16 +726,17 @@ function refreshReserve() {
     const open = document.createElement('button'); open.className = 'reserve-deck';
     const name = document.createElement('strong'); name.textContent = entry.name;
     const detail = document.createElement('span');
-    detail.textContent = [entry.translation, `${entry.count} ${entry.count === 1 ? 'carta' : 'cartas'}`, 'Acciones'].filter(Boolean).join(' · ');
+    detail.textContent = [entry.translation, `${entry.count} ${entry.count === 1 ? 'carta' : 'cartas'}`, entry.key ? 'Añadir a la mesa' : 'Acciones'].filter(Boolean).join(' · ');
     open.append(name, detail);
-    open.setAttribute('aria-label', `${entry.name} · ${entry.count} cartas · Abrir acciones`);
-    const locate = document.createElement('button'); locate.textContent = 'Localizar';
-    locate.setAttribute('aria-label', `Localizar ${entry.name} en la mesa`);
+    open.setAttribute('aria-label', `${entry.name} · ${entry.count} cartas · ${entry.key?'Añadir a la mesa':'Abrir acciones'}`);
+    const locate = document.createElement('button'); locate.textContent = entry.key?'Añadir':'Localizar';
+    locate.setAttribute('aria-label', `${entry.key?'Añadir':'Localizar'} ${entry.name} en la mesa`);
     for (const [button, action] of [[open, 'inspect'], [locate, 'locate']]) {
-      button.dataset.reserveAction = `${entry.id}:${action}`;
+      button.dataset.reserveAction = `${entry.key || entry.id}:${action}`;
       button.onclick = () => {
+        if(entry.key) return addLibraryDeck(entry.key);
         const current = byId(entry.id);
-        if (!current || !isReserveStack(current)) { refreshReserve(); return; }
+        if (!current || (!IS_COLLECTION&&!isReserveStack(current))) { refreshReserve(); return; }
         closeReserve(); manualView(); fitObjects([current], 2);
         if (action === 'inspect') { cancelPlacement(); inspectObject(current); }
         else status(entry.name);
@@ -720,11 +748,32 @@ function refreshReserve() {
   if (!entries.length) {
     const empty = document.createElement('p'); empty.textContent = 'No hay mazos de reserva que coincidan.'; body.appendChild(empty);
   }
+  if(entries.length>reserveLimit) {
+    const more=document.createElement('button'); more.textContent=`Mostrar más (${entries.length-reserveLimit})`;
+    more.onclick=()=>{reserveLimit+=80;refreshReserve();}; body.appendChild(more);
+  }
+}
+let libraryPending=false;
+async function addLibraryDeck(key) {
+  if(libraryPending) return;
+  libraryPending=true;
+  try {
+    if(online?.active) {
+      if(!await onlineAction({type:'legendary',command:'library',key}))return;
+    } else {
+      const next=clone(state); GameSetup.bring(next,key); pushUndo(); state=next; renderAll();
+    }
+    const added=state.objects.find(o=>o.key===key);
+    closeReserve(); cancelPlacement(); manualView();
+    if(added){fitObjects([added],2);inspectObject(added);}
+  } catch(error){status(error.message);}
+  finally{libraryPending=false;}
 }
 function openReserve() {
-  if (!state || !IS_XFILES) return;
+  if (!state || !IS_COMPACT) return;
   closeInspector(); hidePreview(); $('#menu').hidden = true;
   $('#reserve-search').value = '';
+  reserveLimit=80;
   $('#reserve-dialog').hidden = false;
   refreshReserve();
   $('#reserve-close').focus({ preventScroll: true });
@@ -1177,7 +1226,7 @@ function placeAt(p) {
     if (i < 0) { cancelPlacement(); return; }
     pushUndo();
     const [card] = state.hand.splice(i, 1);
-    o = addStack([card], p.x, p.z, true, IS_XFILES ? 1.12 : 1.47, 180);
+    o = addStack([card], p.x, p.z, true, IS_COMPACT ? 1.12 : 1.47, 180);
   } else {
     o = byId(placement.id);
     if (!o) { cancelPlacement(); return; }
@@ -1498,7 +1547,7 @@ function startHandDrag(e, i) {
     ghost.style.top = ev.clientY - offsetY + 'px';
     clearDrop();
     if (onTable(ev)) {
-      const target = { type: 'stack', scale: IS_XFILES ? 1.12 : 1.47, ...screenToWorld(ev.clientX, ev.clientY) };
+      const target = { type: 'stack', scale: IS_COMPACT ? 1.12 : 1.47, ...screenToWorld(ev.clientX, ev.clientY) };
       const zone = findPlayerZone(target);
       if (zone) Object.assign(target, { x: zone.x, z: zone.z });
       const drop = findDropTarget(target) || zone;
@@ -1597,9 +1646,9 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) relea
 
 // Botones
 $('#btn-undo').onclick = undo;
-document.querySelectorAll('#zones [data-zone]').forEach(b => { b.onclick = () => IS_XFILES && b.dataset.zone === 'reserve' ? openReserve() : focusZone(b.dataset.zone); });
+document.querySelectorAll('#zones [data-zone]').forEach(b => { b.onclick = () => IS_COMPACT && b.dataset.zone === 'reserve' ? openReserve() : focusZone(b.dataset.zone); });
 $('#reserve-close').onclick = closeReserve;
-$('#reserve-search').oninput = refreshReserve;
+$('#reserve-search').oninput = () => {reserveLimit=80;refreshReserve();};
 $('#reserve-table').onclick = () => { closeReserve(); focusZone('reserve'); };
 $('#zoom-in').onclick = () => zoomAt(viewport.clientWidth / 2, viewport.clientHeight / 2, view.zoom * 1.4);
 $('#zoom-out').onclick = () => zoomAt(viewport.clientWidth / 2, viewport.clientHeight / 2, view.zoom / 1.4);
@@ -1711,14 +1760,14 @@ for (const link of document.querySelectorAll('#games-dialog a[data-game]')) link
   save(); location.assign(link.href);
 };
 function updateTurnUI() {
-  if (!IS_XFILES) return;
+  if (!IS_COMPACT) return;
   const seat = online?.room?.seat || 1;
   $('#turn-summary').textContent = state?.setup
     ? `Turno del jugador ${state.setup.turn} · Tu zona: jugador ${seat} · ${state.hand.length} cartas en tu mano`
-    : 'Pulsa Preparar para elegir las temporadas y los agentes.';
+    : 'Pulsa Preparar para elegir la partida y los jugadores.';
   for (const button of document.querySelectorAll('[data-xf-command]')) {
     button.disabled = !state?.setup || Boolean(online?.active && !online.connected)
-      || (button.dataset.xfCommand === 'endTurn' && state.setup.turn !== seat);
+      || (IS_XFILES && button.dataset.xfCommand === 'endTurn' && state.setup.turn !== seat);
   }
 }
 let xfilesPending = false;
@@ -1731,7 +1780,7 @@ async function xfilesAction(action) {
   try {
     let message;
     if (online?.active) {
-      const response = await online.action({ type: 'xfiles', ...action }); message = response.message || 'Acción completada';
+      const response = await online.action({ type: IS_COLLECTION?'legendary':'xfiles', ...action }); message = response.message || 'Acción completada';
     } else {
       const next = clone(state);
       message = GameSetup.act(next, next.hand, 1, action);
@@ -1789,10 +1838,30 @@ GameSetup.scenarios.forEach(scenario => {
   option.textContent = scenario.title;
   $('#setup-scenario').appendChild(option);
 });
+if(IS_COLLECTION && GameSetup.avatars.length) {
+  $('#collection-avatars').hidden=false;
+  const defaults=['Neo1','Morpheus1','Trinity1','Switch','Mouse'];
+  for(let seat=1;seat<=5;seat++) {
+    const label=document.createElement('label'); label.dataset.collectionSeat=seat;
+    const select=document.createElement('select'); select.id='collection-avatar-'+seat;
+    for(const avatar of GameSetup.avatars) {
+      const option=document.createElement('option'); option.value=avatar.id;option.textContent=avatar.name;select.appendChild(option);
+    }
+    select.value=defaults[seat-1];label.append(document.createTextNode('Jugador '+seat),select);$('#collection-avatar-fields').appendChild(label);
+  }
+}
 function updateSetupSummary() {
   if (!initial) return;
   const scenario = GameSetup.scenarios.find(s => s.id === $('#setup-scenario').value);
   if (!scenario) return;
+  if(IS_COLLECTION) {
+    const players=Number($('#setup-players').value);
+    document.querySelectorAll('[data-collection-seat]').forEach(label=>{label.hidden=Number(label.dataset.collectionSeat)>players;});
+    $('#setup-summary').textContent=GAME.id==='matrix'
+      ? `Zion: 56 cartas · Dock: 5 cartas · Tres actos con ${[0,1,3,5,5][players-1]} cartas adicionales cada uno · Mano inicial: 6.`
+      : 'Mesa manual. Trae los mazos desde Reserva y prepara el escenario según el reglamento. Cada jugador tiene su zona y su mano privada.';
+    return;
+  }
   if (IS_XFILES) {
     const players = Number($('#setup-players').value);
     $('#xfiles-seasons').hidden = scenario.id !== 'custom';
@@ -1811,13 +1880,14 @@ $('#btn-setup').onclick = () => {
     $('#setup-scenario').value = state.setup.scenario;
     $('#setup-players').value = state.setup.players;
     $('#setup-drones').checked = state.setup.expansionDrones;
+    if(IS_COLLECTION && state.setup.avatars)state.setup.avatars.forEach((avatar,i)=>{$('#collection-avatar-'+(i+1)).value=avatar;});
     if (IS_XFILES) {
       document.querySelectorAll('#xf-heroes input').forEach(input => { input.checked = state.setup.heroes.includes(Number(input.value)); });
       state.setup.avatars.forEach((avatar, i) => { $(`#xf-avatar-${i+1}`).value=avatar; });
       state.setup.seasons.forEach((season, i) => { $(`#xf-season-${i+1}`).value=season; });
     }
   }
-  if (IS_XFILES) {
+  if (IS_COMPACT) {
     // A browser controls one private hand; additional seats are provided by rooms.
     for (const option of $('#setup-players').options) option.disabled = !online?.active && Number(option.value)>1;
     if (!online?.active) $('#setup-players').value='1';
@@ -1829,10 +1899,19 @@ $('#btn-setup').onclick = () => {
   $('#setup-scenario').focus();
 };
 $('#setup-close').onclick = () => { $('#setup').hidden = true; };
-$('#setup-scenario').onchange = $('#setup-players').onchange = updateSetupSummary;
+$('#setup-players').onchange = updateSetupSummary;
+$('#setup-scenario').onchange = () => {
+  if(IS_COLLECTION && GAME.id==='matrix') {
+    const movie=GameSetup.scenarios.find(s=>s.id===$('#setup-scenario').value)?.movie||1;
+    const defaults=movie===1?['Neo1','Morpheus1','Trinity1','Switch','Mouse']:['Neo'+movie,'Morpheus2','Trinity2','Niobe','Roland'];
+    defaults.forEach((key,i)=>{$('#collection-avatar-'+(i+1)).value=key;});
+  }
+  updateSetupSummary();
+};
 $('#setup-form').onsubmit = async e => {
   e.preventDefault();
   const options = { scenario: $('#setup-scenario').value, players: Number($('#setup-players').value), expansionDrones: $('#setup-drones').checked };
+  if(IS_COLLECTION && GameSetup.avatars.length)options.avatars=Array.from({length:options.players},(_,i)=>$('#collection-avatar-'+(i+1)).value);
   if (IS_XFILES) Object.assign(options, {
     heroes: [...document.querySelectorAll('#xf-heroes input:checked')].map(input => Number(input.value)),
     avatars: Array.from({length: options.players}, (_, i) => $(`#xf-avatar-${i+1}`).value),
@@ -1848,7 +1927,7 @@ $('#setup-form').onsubmit = async e => {
   }
   try {
     const prepared = GameSetup.create(initial, options);
-    if (IS_XFILES) GameSetup.draw(prepared, prepared.hand, 1, 6);
+    if (IS_COMPACT) GameSetup.draw(prepared, prepared.hand, 1, 6);
     pushUndo();
     cancelPlacement();
     closeInspector();

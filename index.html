@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0b0f0e">
 <title>Legendary Encounters: Alien — Mesa</title>
-<link rel="stylesheet" href="style.css?v=20">
+<link rel="stylesheet" href="style.css?v=21">
 </head>
 <body class="access-locked">
 <main id="app-access">
@@ -109,6 +109,7 @@
       <p id="setup-summary"></p>
       <p id="setup-description" class="setup-note">Prepara localización, objetivos, cuartel, 5 cartas en HQ y colmena. Después elige avatar y roba tu mano inicial.</p>
       <p class="setup-note">Sustituye la mesa actual. Puedes recuperarla con Deshacer.</p>
+      <fieldset id="collection-avatars" hidden><legend>Personajes de los jugadores</legend><div id="collection-avatar-fields"></div></fieldset>
       <p id="setup-error" role="alert" hidden></p>
     </div>
     <div class="setup-footer"><button id="setup-submit" type="submit">Preparar partida</button></div>
@@ -136,6 +137,12 @@
       <p>En el Bureau, abre las acciones de una carta para escanearla o reclutarla y reponer su espacio. Los costes, las decisiones y los efectos de las cartas se resuelven manualmente. Creencia y Duda son cartas de sus reservas.</p>
       <p>Reserva organiza los mazos de arriba por categorías. Busca «Syndicate» o «Sindicato» y toca su nombre para abrir las acciones, o «Localizar» para verlo en la mesa.</p>
       <p><a href="xfiles/assets/rules.pdf" target="_blank" rel="noopener">Reglamento original en inglés</a></p>
+    </section>
+    <section id="collection-help" hidden>
+      <h2>Tu colección Legendary</h2>
+      <p>Reserva contiene los mazos y expansiones. Busca por nombre y pulsa Añadir para traer un mazo a la mesa. Cada mazo se añade una vez; puedes deshacerlo.</p>
+      <p>Matrix prepara automáticamente la película y los personajes. En los demás juegos, la preparación del escenario es manual: coloca y mezcla los mazos según su reglamento. Turno permite robar, jugar la mano y descartarla al terminar.</p>
+      <div id="collection-rules"></div>
     </section>
     <section id="backup-tools" aria-labelledby="backup-title">
       <h2 id="backup-title">Continuar en otro dispositivo</h2>
@@ -193,6 +200,11 @@
     <div class="game-list"><p>Cada juego conserva su partida individual. Las salas también se guardan por separado.</p>
       <a data-game="alien" href="?game=alien"><strong>ALIEN</strong><span>Escenarios y expansiones</span></a>
       <a data-game="xfiles" href="?game=xfiles"><strong>X-FILES</strong><span>Temporadas 1–9 · Solo y con amigos</span></a>
+      <a data-game="matrix" href="?game=matrix"><strong>THE MATRIX</strong><span>Tres películas · Preparación automática</span></a>
+      <a data-game="bond" href="?game=bond"><strong>JAMES BOND</strong><span>007 y expansiones · Mesa manual</span></a>
+      <a data-game="marvel" href="?game=marvel"><strong>MARVEL LEGENDARY</strong><span>Héroes, villanos y expansiones · Mesa manual</span></a>
+      <a data-game="predator" href="?game=predator"><strong>PREDATOR</strong><span>Humanos y cazadores · Mesa manual</span></a>
+      <a data-game="firefly" href="?game=firefly"><strong>FIREFLY</strong><span>Tripulación, episodios y Serenity · Mesa manual</span></a>
     </div>
   </div>
 </div>
@@ -217,17 +229,18 @@
       <button data-xf-command="gain" data-resource="strike">Recibir herida</button>
       <button data-xf-command="gain" data-resource="belief">Ganar Creencia</button><button data-xf-command="gain" data-resource="doubt">Ganar Duda</button>
       <button data-xf-command="gain" data-resource="agent">Reclutar agente especial</button>
-    </div><p class="setup-note">Resuelve los costes y los efectos de las cartas. Terminar turno descarta tu mano y las cartas de tu zona de juego, roba seis y pone combate y estrellas a cero.</p>
+    </div><p id="turn-note" class="setup-note">Resuelve los costes y los efectos de las cartas. Terminar turno descarta tu mano y las cartas de tu zona de juego, roba seis y pone combate y estrellas a cero.</p>
     <p id="turn-feedback" role="status" aria-live="polite"></p></div>
   </div>
 </div>
 <script src="setup.js?v=7"></script>
 <script src="xfiles/setup.js?v=5"></script>
-<script src="game-config.js?v=1"></script>
+<script src="games/setup.js?v=1"></script>
+<script src="game-config.js?v=2"></script>
 <script src="multiplayer-config.js?v=1"></script>
 <script src="access.js?v=1"></script>
 <script src="multiplayer.js?v=9"></script>
-<script src="backup.js?v=2"></script>
-<script src="app.js?v=25"></script>
+<script src="backup.js?v=3"></script>
+<script src="app.js?v=26"></script>
 </body>
 </html>
