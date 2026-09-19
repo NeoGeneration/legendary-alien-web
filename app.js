@@ -38,6 +38,7 @@ let inspectorTarget = null;
 const DOUBLE_TAP_MS = 400;
 let lastStackTap = null;
 let cardZoom = null;
+const inspectedCards = new WeakMap();
 let online = null;
 let individualState = null, individualUndo = null, pendingRemote = null;
 let cancelHandGesture = null;
@@ -980,6 +981,7 @@ function openSearch(o, revealed = null) {
   (revealed || o.cards).forEach((card, i) => {
     const item = document.createElement('div');
     item.className = 'deck-card';
+    inspectedCards.set(item, card);
     const img = document.createElement('img');
     img.src = card.face;
     img.alt = card.name || `Carta ${i + 1}`;
@@ -987,6 +989,7 @@ function openSearch(o, revealed = null) {
     img.setAttribute('role', 'button');
     img.setAttribute('aria-label', `Robar ${img.alt}`);
     img.onkeydown = e => {
+      if (e.ctrlKey || e.metaKey || e.altKey || e.isComposing) return;
       if (e.key === 'Enter') { e.preventDefault(); if (!e.repeat) img.onclick(e); }
       if (e.key === ' ' || e.code === 'Space') {
         e.preventDefault();
@@ -1018,6 +1021,10 @@ function openSearch(o, revealed = null) {
   $('#modal').hidden = false;
 }
 function closeModal() { $('#modal').hidden = true; }
+function inspectedCardAt(element) {
+  const item = element?.closest?.('#modal-body .deck-card');
+  return item && inspectedCards.get(item);
+}
 
 function spawnFromBag(o) {
   if (online?.active) return onlineAction({ type: 'spawn', id: o.id });
@@ -1640,8 +1647,16 @@ addEventListener('keydown', e => {
   }
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.target.closest?.('input, textarea, [contenteditable="true"]')) { e.preventDefault(); undo(); return; }
   if (e.key === 'Escape') { cancelHandGesture?.(); closeModal(); closeInspector(); cancelPlacement(); if (!$('#reserve-dialog').hidden) closeReserve(); $('#help').hidden = true; $('#setup').hidden = true; $('#room-dialog').hidden = true; $('#games-dialog').hidden = true; $('#turn-dialog').hidden = true; $('#menu').hidden = true; return; }
-  if (!$('#inspector').hidden || !$('#modal').hidden || !$('#help').hidden || !$('#setup').hidden || !$('#room-dialog').hidden || !$('#games-dialog').hidden || !$('#turn-dialog').hidden || !$('#reserve-dialog').hidden) return;
+  if (!$('#inspector').hidden || !$('#help').hidden || !$('#setup').hidden || !$('#room-dialog').hidden || !$('#games-dialog').hidden || !$('#turn-dialog').hidden || !$('#reserve-dialog').hidden) return;
   if (e.target.closest?.('input, textarea, select, [contenteditable="true"]')) return;
+  if (!$('#modal').hidden) {
+    if (space && !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey && !e.isComposing) {
+      const hovered = mousePosition && document.elementFromPoint(mousePosition.x, mousePosition.y);
+      const card = inspectedCardAt(hovered) || inspectedCardAt(document.activeElement);
+      if (card) { e.preventDefault(); openCardZoom(card, true, 0, true); }
+    }
+    return;
+  }
   if (space) {
     if (e.repeat || e.ctrlKey || e.metaKey || e.altKey || drag || pinch || suppressHandClick) return;
     const hoveredObject = hoverId && byId(hoverId);
