@@ -21,8 +21,8 @@ if (window.AlienGame.id === 'xfiles') {
 }
 if (window.AlienGame.collection) {
   const game = window.AlienGame.id;
-  document.querySelector('[data-zone="complex"]').textContent = {matrix:'Matrix',bond:'Assignment',marvel:'Ciudad',marvel2:'Ciudad',predator:'Wilds',firefly:'Verse'}[game];
-  document.querySelector('[data-zone="hq"]').textContent = {matrix:'Dock',bond:'Q Branch',marvel:'HQ',marvel2:'HQ',predator:'HQ',firefly:'Bridge'}[game];
+  document.querySelector('[data-zone="complex"]').textContent = {matrix:'Matrix',bond:'Assignment',marvel:'Ciudad',marvel2:'Ciudad',dc:'Ciudad',predator:'Wilds',firefly:'Verse'}[game];
+  document.querySelector('[data-zone="hq"]').textContent = {matrix:'Dock',bond:'Q Branch',marvel:'HQ',marvel2:'HQ',dc:'HQ',predator:'HQ',firefly:'Bridge'}[game];
   document.querySelector('#setup-drones-label').hidden = true;
   document.querySelector('#setup-players').value = '1';
   document.querySelector('#btn-turn').hidden = false;
@@ -32,9 +32,10 @@ if (window.AlienGame.collection) {
     : game === 'bond' ? 'Elige una película. Prepara el Mastermind, Scheme, villanos por etapas, Q Branch y los mazos de jugador. Reparte seis cartas a cada jugador conectado.'
     : game === 'marvel' ? 'Filtra por colecciones: Solo Core usa el juego base original. Elige tus héroes o déjalos al azar. Puedes elegir dificultad Epic y solitario clásico o avanzado.'
     : game === 'marvel2' ? 'Segunda Edición: 550 cartas, 9 Schemes y 5 Masterminds, con sus versiones Epic. Elige héroes, villanos y Henchmen o déjalos al azar. Tapete de esta edición y guardado independiente.'
+    : game === 'dc' ? 'DC: 500 cartas, 14 héroes, 9 Schemes y 5 Masterminds con versiones Epic. Elige los grupos o déjalos al azar. Tapete propio, contador de Hope/Fear y transformaciones disponibles.'
     : game === 'predator' ? 'Elige humanos o cazadores, película, personajes y variantes. Prepara los tres mazos por etapas, HQ, suministros y los mazos de jugador con su Role.'
     : 'Elige cinco personajes principales y tres episodios. Prepara los cuatro personajes de apoyo, Bridge, suministros y los mazos de jugador con un Talent.';
   document.querySelector('#turn-note').textContent = 'Los efectos, costes y avances de enemigos se resuelven manualmente. Terminar turno descarta la mano y las cartas jugadas, roba seis y reinicia Combate y Estrellas.';
   for (const button of document.querySelectorAll('[data-xf-command="gain"], [data-xf-command="conspiracy"]')) button.hidden = true;
-  document.querySelector('#marvel-mastermind-label').hidden = !['marvel','marvel2'].includes(game);
+  document.querySelector('#marvel-mastermind-label').hidden = !['marvel','marvel2','dc'].includes(game);
 }

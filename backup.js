@@ -5,7 +5,7 @@ const AlienBackup = (() => {
   const maxBytes = 5 * 1024 * 1024;
   const types = new Set(['stack', 'playmat', 'board', 'tile', 'player-zone', 'text', 'token', 'bag', 'counter']);
   const image = value => typeof value === 'string'
-    && /^(?:xfiles\/|games\/(?:matrix|bond|marvel|marvel2|predator|firefly)\/)?(cards|assets)\/[\w/.-]+\.(png|jpe?g|webp)$/i.test(value) && !value.split('/').includes('..');
+    && /^(?:xfiles\/|games\/(?:matrix|bond|marvel|marvel2|dc|predator|firefly)\/)?(cards|assets)\/[\w/.-]+\.(png|jpe?g|webp)$/i.test(value) && !value.split('/').includes('..');
   const card = value => value && image(value.face) && image(value.back);
   const finite = (object, keys) => keys.every(key => Number.isFinite(object[key]));
   function validate(backup) {
@@ -15,7 +15,7 @@ const AlienBackup = (() => {
       if (!/^[A-HJ-NP-Z2-9]{8}$/.test(backup.room?.code || '') || !/^[a-f0-9]{64}$/.test(backup.room?.token || '')) invalid();
     } else if (backup.kind === 'solo') {
       const game = backup.state;
-      if (game?.gameId && !['alien', 'xfiles', 'matrix', 'bond', 'marvel', 'marvel2', 'predator', 'firefly'].includes(game.gameId)) invalid();
+      if (game?.gameId && !['alien', 'xfiles', 'matrix', 'bond', 'marvel', 'marvel2', 'dc', 'predator', 'firefly'].includes(game.gameId)) invalid();
       if (!game || game.schemaVersion !== 4 || !Array.isArray(game.objects) || game.objects.length > 1600
         || !Array.isArray(game.hand) || game.hand.length > 10000 || !game.hand.every(card)
         || !Number.isSafeInteger(game.nextId) || game.nextId < 1) invalid();

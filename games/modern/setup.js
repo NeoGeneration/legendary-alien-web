@@ -22,9 +22,10 @@ const ModernLegendarySetup=(()=>{
     }
     if(board==='dc') {
       const p=(x,y)=>pixel(x,y,2048,934);
-      return {mastermind:p(716,482),scheme:p(716,212),officers:p(716,746),sidekicks:p(517,746),
+      return {mastermind:p(716,482),tactics:p(270,212),scheme:p(716,212),special:p(517,212),officers:p(716,746),sidekicks:p(517,746),
         bystanders:p(1800,212),wounds:p(1612,212),villain:p(1800,482),hero:p(1800,746),
-        hq:i=>p([900,1075,1250,1425,1600][i],746),city:i=>p([1600,1425,1250,1075,900][i],482),hope:p(270,612)};
+        hq:i=>p([900,1075,1250,1425,1600][i],746),city:i=>p([1600,1425,1250,1075,900][i],482),hope:p(270,612),
+        tornado:{x:p(1600,482).x,z:mat.z+mat.height/2+2.3}};
     }
     const p=(x,y)=>pixel(x,y,1831,1304);
     return {mastermind:p(176,842),scheme:p(176,472),officers:p(176,1160),sidekicks:{x:-17,z:-1},
@@ -113,7 +114,7 @@ const ModernLegendarySetup=(()=>{
       notes.push('Enshrouded Identity: no hay Mastermind ni Always Leads al empezar. Al derrotar todos los Bodyguards, usa «Revelar Mastermind» en Turno.');
     }
     if(scenario.special==='killgorithm')side('Killgorithm',take('twists',1),true,p.special||{x:p.scheme.x-5,z:p.scheme.z});
-    if(scenario.special==='labors')side('Labor of Superman',wounds.splice(0,1),true,{x:p.scheme.x-5,z:p.scheme.z});
+    if(scenario.special==='labors')side('Labor of Superman',wounds.splice(0,1),true,p.special||{x:p.scheme.x-5,z:p.scheme.z});
     if(scenario.special==='liberation')side('Mankind Liberation Front',mix([...extraVillains.flatMap(k=>take(k)),...bystanders.splice(0,3)]),false);
     if(scenario.special==='bizarro') {
       const index=villainDeck.findIndex(c=>c.name==='Bizarro');
@@ -122,7 +123,7 @@ const ModernLegendarySetup=(()=>{
     }
     const schemes=pools.get('schemes'),index=schemes.findIndex(c=>c.uid===scenario.card);
     if(index<0)throw new Error('Falta la carta de Scheme.');
-    add(game,'Scheme',schemes.splice(index,1),scenario.special==='tornado'?{x:p.city(0).x,z:p.city(0).z+6}:p.scheme,true);
+    add(game,'Scheme',schemes.splice(index,1),scenario.special==='tornado'?(p.tornado||{x:p.city(0).x,z:p.city(0).z+6}):p.scheme,true);
     taken.add('schemes');
     for(let i=0;i<5;i++)add(game,'HQ '+(i+1),heroDeck.splice(0,1),p.hq(i),true);
     add(game,'Hero Deck',heroDeck,p.hero);

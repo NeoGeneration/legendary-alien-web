@@ -3,7 +3,7 @@
 // Shared table tools and automatic scenario preparation. Card effects are
 // resolved by the players. Bond recipes are reviewed in build_bond_setup.py.
 const LegendarySetup = (() => {
-  const titles = { matrix: 'THE MATRIX', bond: 'JAMES BOND', marvel: 'MARVEL LEGENDARY', marvel2: 'MARVEL · 2ª EDICIÓN', predator: 'PREDATOR', firefly: 'FIREFLY' };
+  const titles = { matrix: 'THE MATRIX', bond: 'JAMES BOND', marvel: 'MARVEL LEGENDARY', marvel2: 'MARVEL · 2ª EDICIÓN', dc: 'LEGENDARY DC', predator: 'PREDATOR', firefly: 'FIREFLY' };
   const engines = new Map();
   const copy = value => JSON.parse(JSON.stringify(value));
   function shuffle(cards, random = Math.random) {

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0b0f0e">
 <title>Legendary Encounters: Alien — Mesa</title>
-<link rel="stylesheet" href="style.css?v=24">
+<link rel="stylesheet" href="style.css?v=25">
 </head>
 <body class="access-locked">
 <main id="app-access">
@@ -187,8 +187,9 @@
     <section id="collection-help" hidden>
       <h2>Tu colección Legendary</h2>
       <p>Reserva contiene los mazos y expansiones. Busca por nombre y pulsa Añadir para traer un mazo a la mesa. Cada mazo se añade una vez; puedes deshacerlo.</p>
-      <p>Matrix y James Bond preparan automáticamente la película y los mazos. Marvel original incluye 175 Schemes del mod. Marvel Segunda Edición tiene sus propias cartas y preparación automática. Predator prepara humanos o cazadores; Firefly permite elegir los episodios y los cinco personajes principales. Las cartas restantes quedan alrededor del tapete. Turno permite robar, jugar la mano y descartarla al terminar.</p>
+      <p>Matrix y James Bond preparan automáticamente la película y los mazos. Marvel original incluye 175 Schemes del mod. Marvel Segunda Edición y DC tienen sus propias cartas y preparación automática. Predator prepara humanos o cazadores; Firefly permite elegir los episodios y los cinco personajes principales. Las cartas restantes quedan alrededor del tapete. Turno permite robar, jugar la mano y descartarla al terminar.</p>
       <p>Firefly: al acabar un episodio, resuelve el intermedio y sus gastos antes de pulsar «Preparar episodio siguiente» en Turno. Se limpia el episodio anterior y se colocan las cartas iniciales del siguiente; las manos se conservan.</p>
+      <p>DC: el contador Hope (+) / Fear (−) empieza en cero. Las cartas de Transformación de los héroes elegidos quedan junto al tapete, disponibles para intercambiarlas cuando lo indique una carta.</p>
       <div id="collection-rules"></div>
     </section>
     <section id="backup-tools" aria-labelledby="backup-title">
@@ -252,6 +253,7 @@
       <a data-game="bond" href="?game=bond"><strong>JAMES BOND</strong><span>Nueve películas · Preparación automática</span></a>
       <a data-game="marvel" href="?game=marvel"><strong>MARVEL LEGENDARY</strong><span>175 Schemes · Colección del mod</span></a>
       <a data-game="marvel2" href="?game=marvel2"><strong>MARVEL · SEGUNDA EDICIÓN</strong><span>550 cartas · Preparación automática</span></a>
+      <a data-game="dc" href="?game=dc"><strong>LEGENDARY DC</strong><span>14 héroes · 9 Schemes · Preparación automática</span></a>
       <a data-game="predator" href="?game=predator"><strong>PREDATOR</strong><span>Humanos y cazadores · Preparación automática</span></a>
       <a data-game="firefly" href="?game=firefly"><strong>FIREFLY</strong><span>Tripulación y episodios · Preparación automática</span></a>
     </div>
@@ -286,14 +288,14 @@
 <script src="setup.js?v=7"></script>
 <script src="xfiles/setup.js?v=5"></script>
 <script src="games/marvel/setup.js?v=2"></script>
-<script src="games/modern/setup.js?v=2"></script>
+<script src="games/modern/setup.js?v=3"></script>
 <script src="games/encounters/setup.js?v=1"></script>
-<script src="games/setup.js?v=7"></script>
-<script src="game-config.js?v=8"></script>
+<script src="games/setup.js?v=8"></script>
+<script src="game-config.js?v=9"></script>
 <script src="multiplayer-config.js?v=1"></script>
 <script src="access.js?v=1"></script>
 <script src="multiplayer.js?v=9"></script>
-<script src="backup.js?v=5"></script>
-<script src="app.js?v=36"></script>
+<script src="backup.js?v=6"></script>
+<script src="app.js?v=37"></script>
 </body>
 </html>

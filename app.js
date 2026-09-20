@@ -8,7 +8,7 @@ const TILE = 1;                     // lado de Custom_Tile a scale=1
 const GAME = window.AlienGame || { id: 'alien', title: 'ALIEN', data: 'data.json?v=7', saveKey: 'lea-web-state-v1', previousKey: 'lea-web-before-import-v1' };
 const IS_XFILES = GAME.id === 'xfiles';
 const IS_COLLECTION = Boolean(GAME.collection);
-const IS_MODERN = GAME.id==='marvel2';
+const IS_MODERN = ['marvel2','dc'].includes(GAME.id);
 const IS_COMPACT = IS_XFILES || IS_COLLECTION;
 const GameSetup = IS_COLLECTION ? LegendarySetup.forGame(GAME.id) : IS_XFILES ? XFilesSetup : AlienSetup;
 const SAVE_KEY = GAME.saveKey;
@@ -2124,6 +2124,10 @@ function updateSetupSummary() {
       $('#marvel-mastermind').disabled=hidden;
       const heroes=ModernLegendarySetup.count(scenario.heroes,players,[3,5,5,5,6][players-1])+(scenario.extraHeroes||0);
       const manualHeroes=$('#marvel-hero-mode').value==='manual';
+      for(const input of marvelHeroInputs) {
+        input.disabled=(scenario.heroesRequired||[]).includes(input.value);
+        if(input.disabled)input.checked=true;
+      }
       $('#marvel-hero-picker').hidden=!manualHeroes;
       $('#marvel-hero-count').textContent=`${selectedMarvelHeroes().length} de ${heroes} héroes seleccionados`;
       let valid=!manualHeroes||selectedMarvelHeroes().length===heroes;
@@ -2147,9 +2151,10 @@ function updateSetupSummary() {
         valid&&=!manual||count===expected;
       }
       const names=[...required.villain,...required.henchmen].map(k=>GameSetup.catalog().find(d=>d.key===k).name);
-      $('#modern-required-groups').textContent=(names.length?'Obligatorios: '+names.join(', ')+'. ':'')+(leads&&m.villainChoices?'Always Leads: incluye Sinister Spider-Foes o Sinister Syndicate.':'');
+      const requiredHeroes=(scenario.heroesRequired||[]).map(k=>GameSetup.catalog().find(d=>d.key===k).name);
+      $('#modern-required-groups').textContent=(names.length?'Obligatorios: '+names.join(', ')+'. ':'')+(requiredHeroes.length?'Héroes obligatorios: '+requiredHeroes.join(', ')+'. ':'')+(leads&&m.villainChoices?'Always Leads: incluye Sinister Spider-Foes o Sinister Syndicate.':'');
       $('#setup-submit').disabled=!valid;
-      $('#setup-summary').textContent=`Segunda Edición · ${heroes} héroes · ${ModernLegendarySetup.count(scenario.twists,players)} Scheme Twists · 5 Master Strikes. ${players===1?'Solitario: 2 Henchmen en el mazo y 2 en la ciudad; se ignora Always Leads.':`${players+(scenario.extraVillains||0)} grupos de villanos. ${hidden?'El Mastermind se descubre durante la partida.':'Se respeta Always Leads.'}`} ${players>=4?'Warmup Round: no juegues carta del Villain Deck en el primer turno de cada jugador.':''} Las cartas restantes quedan alrededor del tapete. Partida independiente de Marvel original.`;
+      $('#setup-summary').textContent=`${GAME.id==='dc'?'DC':'Segunda Edición'} · ${heroes} héroes · ${ModernLegendarySetup.count(scenario.twists,players)} Scheme Twists · 5 Master Strikes. ${players===1?'Solitario: 2 Henchmen en el mazo y 2 en la ciudad; se ignora Always Leads.':`${players+(scenario.extraVillains||0)} grupos de villanos. ${hidden?'El Mastermind se descubre durante la partida.':'Se respeta Always Leads.'}`} ${players>=4?'Warmup Round: no juegues carta del Villain Deck en el primer turno de cada jugador.':''} ${scenario.special==='liberation'?'Mankind Liberation Front: otros dos grupos de villanos y tres Bystanders en un mazo separado. ':''}Las cartas restantes quedan alrededor del tapete. Partida independiente de los demás juegos.`;
       return;
     }
     if(GAME.id==='marvel') {
