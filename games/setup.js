@@ -199,10 +199,12 @@ const LegendarySetup = (() => {
       const recommended=['5afc9d','969bbc','2e5e5e','c4e624','3df983','7ba7ad'];
       const heroes=scenario.id==='cosmic-cube'&&mastermind.key==='889fb1'?recommended.slice(0,heroCount):pick('Héroes',heroCount);
       const heroDeck=shuffle(heroes.flatMap(key=>take(key)),random);
+      const soloAlwaysLeads=players===1&&options.soloAlwaysLeads===true;
+      const leads=players>1||soloAlwaysLeads;
       const requiredVillains=scenario.id==='skrull-invasion'?['a63d04']:[];
-      if(players>1&&mastermind.villain&&!requiredVillains.includes(mastermind.villain))requiredVillains.push(mastermind.villain);
+      if(leads&&mastermind.villain&&!requiredVillains.includes(mastermind.villain)&&(players>1||!requiredVillains.length))requiredVillains.push(mastermind.villain);
       const villainKeys=pick('Villanos',[1,2,3,3,4][players-1],requiredVillains);
-      const henchKeys=pick('Henchmen',(players>=4?2:1)+(scenario.id==='prison-breakout'?1:0),players>1&&mastermind.henchman?[mastermind.henchman]:[]);
+      const henchKeys=pick('Henchmen',(players>=4?2:1)+(scenario.id==='prison-breakout'?1:0),leads&&mastermind.henchman?[mastermind.henchman]:[]);
       const bystanders=take('eae6a5',30), twists=take('c82082',11), wounds=take('f49fdc',scenario.id==='legacy-virus'?players*6:30);
       const twistCount=scenario.id==='civil-war'&&players>=4?5:scenario.twists||8;
       const villainDeck=[...villainKeys.flatMap(key=>take(key)),...henchKeys.flatMap(key=>take(key,players===1?3:10)),
@@ -227,7 +229,7 @@ const LegendarySetup = (() => {
         add(game,'Mazo de jugador '+(i+1),shuffle(take(key),random),seatZone(game,i+1,'draw'));
       }
       Object.assign(game.setup,{mastermind:mastermind.key,heroes:heroes.map(key=>entry(key).name),villains:villainKeys.map(key=>entry(key).name),
-        henchmen:henchKeys.map(key=>entry(key).name),edition:'core-first',soloMode:players===1?'classic':null});
+        henchmen:henchKeys.map(key=>entry(key).name),edition:'core-first',soloAlwaysLeads,soloMode:players===1?'classic':null});
       addMarvelReserves(game,true);
       return game;
     }

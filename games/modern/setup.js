@@ -5,6 +5,20 @@
 const ModernLegendarySetup=(()=>{
   const clone=v=>JSON.parse(JSON.stringify(v));
   const count=(v,p,fallback=0)=>v===undefined?fallback:Array.isArray(v)?v[p-1]:v;
+  function requiredGroups(scenario,players,mastermind,soloAlwaysLeads=false) {
+    const villains=[...(scenario.villains||[])],henchmen=[];
+    let villainChoices=[];
+    if(mastermind&&(players>1||soloAlwaysLeads)) {
+      const capacity=players+(scenario.extraVillains||0);
+      for(const key of mastermind.villains||[]) {
+        // The optional solo rule fills an existing slot; Scheme requirements win.
+        if(!villains.includes(key)&&(players>1||villains.length<capacity))villains.push(key);
+      }
+      if(mastermind.villainChoices&&(players>1||villains.length<capacity||mastermind.villainChoices.some(k=>villains.includes(k))))villainChoices=[...mastermind.villainChoices];
+      henchmen.push(...mastermind.henchmen||[]);
+    }
+    return {villains,henchmen,villainChoices};
+  }
   function project(matrix,x,y) {
     const [a,b,c,d,e,f,g,h]=matrix,k=g*x+h*y+1;
     return {x:(a*x+b*y+c)/k,y:(d*x+e*y+f)/k};
@@ -75,15 +89,13 @@ const ModernLegendarySetup=(()=>{
     const m=concealed?null:requested==='random'?mix([...meta.masterminds])[0]:meta.masterminds.find(m=>m.key===requested);
     if(!concealed&&!m)throw new Error('Elige un Mastermind de este juego.');
     const epic=Boolean(options.epic);
-    const requiredVillains=[...(scenario.villains||[])],requiredHenchmen=[];
-    if(players>1&&m) {
-      for(const key of m.villains||[])if(!requiredVillains.includes(key))requiredVillains.push(key);
-      if(m.villainChoices) {
-        const choices=Array.isArray(options.villainKeys)?m.villainChoices.filter(k=>options.villainKeys.includes(k)):m.villainChoices;
-        if(!choices.length)throw new Error('Always Leads exige incluir '+m.villainChoices.map(k=>decks.get(k).name).join(' o ')+'.');
-        requiredVillains.push(mix([...choices])[0]);
-      }
-      requiredHenchmen.push(...m.henchmen||[]);
+    const soloAlwaysLeads=game.gameId==='marvel2'&&players===1&&options.soloAlwaysLeads===true&&!concealed;
+    const required=requiredGroups(scenario,players,m,soloAlwaysLeads);
+    const requiredVillains=required.villains,requiredHenchmen=required.henchmen;
+    if(required.villainChoices.length&&!required.villainChoices.some(k=>requiredVillains.includes(k))) {
+      const choices=Array.isArray(options.villainKeys)?required.villainChoices.filter(k=>options.villainKeys.includes(k)):required.villainChoices;
+      if(!choices.length)throw new Error('Always Leads exige incluir '+required.villainChoices.map(k=>decks.get(k).name).join(' o ')+'.');
+      requiredVillains.push(mix([...choices])[0]);
     }
     const heroKeys=selection('heroKeys','Héroes',count(scenario.heroes,players,[3,5,5,5,6][players-1])+(scenario.extraHeroes||0),scenario.heroesRequired||[]);
     const villainKeys=selection('villainKeys','Villanos',players+(scenario.extraVillains||0),requiredVillains);
@@ -142,12 +154,12 @@ const ModernLegendarySetup=(()=>{
     }
     if(city.length) {
       city.forEach((card,i)=>add(game,'Inicio solitario · '+(i+1),[card],p.city(1-i),true));
-      notes.push('Solitario: tras robar tu mano inicial, resuelve en orden los Ambush de los dos Henchmen que empiezan en la ciudad. Después juega la primera carta del Villain Deck. Se ignora Always Leads.');
+      notes.push('Solitario: tras robar tu mano inicial, resuelve en orden los Ambush de los dos Henchmen que empiezan en la ciudad. Después juega la primera carta del Villain Deck. '+(soloAlwaysLeads?'Variante: se aplica Always Leads.':'Se ignora Always Leads.'));
     }
     if(players>=4)notes.push('Warmup Round: en el primer turno de cada jugador no se juega carta del Villain Deck.');
     notes.push('HQ inicial: si hay al menos dos Héroes de coste 7 o más, podéis acordar sustituir esos espacios y barajar las cartas retiradas en el Hero Deck.');
     for(let seat=1;seat<=players;seat++)add(game,'Mazo de jugador '+seat,mix([...take('agents',8),...take('troopers',4)]),seatZone(game,seat,'draw'));
-    game.setup={...game.setup,edition:game.gameId,mastermind:m?.key||null,epic,handSize:6,twists,masterStrikes:5,bystanders:bystanderCount,
+    game.setup={...game.setup,edition:game.gameId,mastermind:m?.key||null,epic,soloAlwaysLeads,handSize:6,twists,masterStrikes:5,bystanders:bystanderCount,
       heroes:heroKeys.map(k=>decks.get(k).name),villains:villainKeys.map(k=>decks.get(k).name),henchmen:henchKeys.map(k=>decks.get(k).name),
       extraVillains:extraVillains.map(k=>decks.get(k).name),soloMode:players===1?'modern':null,hiddenMastermind:concealed,notes,
       heroKeys,villainKeys,henchmenKeys:henchKeys,heroMode:options.heroKeys?'manual':'random',
@@ -179,6 +191,6 @@ const ModernLegendarySetup=(()=>{
     game.setup.mastermind=m.key;game.setup.hiddenMastermind=false;
     return 'Mastermind revelado: '+m.name;
   }
-  return {prepare,positions,revealMastermind,count,project};
+  return {prepare,positions,revealMastermind,count,project,requiredGroups};
 })();
 if(typeof module!=='undefined')module.exports=ModernLegendarySetup;

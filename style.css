@@ -297,6 +297,11 @@ html[data-game="marvel"] #game-name, html[data-game="marvel2"] #game-name, html[
 #game-name { font-weight: inherit; }
 .game-list, .turn-content { padding: 20px; overflow-y: auto; }
 #games-dialog .modal-box, #turn-dialog .modal-box { max-width: 540px; }
+#enemies-dialog .modal-box { max-width: 540px; }
+#enemies-dialog .help-content { padding: 20px; overflow-y: auto; min-height: 0; }
+#enemies-dialog h2 { margin: 18px 0 6px; font-size: 14px; color: var(--accent); }
+#enemies-dialog h2:first-child { margin-top: 0; }
+#enemies-dialog p { margin: 0 0 14px; line-height: 1.5; overflow-wrap: anywhere; }
 .game-list > p, #turn-summary { margin: 0 0 18px; color: #b8c6c0; line-height: 1.5; }
 .game-list a { display: flex; flex-direction: column; gap: 8px; color: var(--text); text-decoration: none; padding: 20px 0; border-top: 1px solid var(--line); min-height: 88px; }
 .game-list a strong { font-size: 25px; letter-spacing: .14em; color: var(--accent); }

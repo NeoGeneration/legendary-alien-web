@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#0b0f0e">
 <meta name="robots" content="noindex, nofollow, noimageindex, nosnippet">
 <title>Legendary Encounters: Alien — Mesa</title>
-<link rel="stylesheet" href="style.css?v=27">
+<link rel="stylesheet" href="style.css?v=28">
 </head>
 <body class="access-locked">
 <main id="app-access">
@@ -31,6 +31,7 @@
 <nav id="zones" aria-label="Zonas de la mesa">
   <button id="btn-games">Juegos</button>
   <button id="btn-turn" hidden>Turno</button>
+  <button id="btn-enemies" hidden>Enemigos</button>
   <button data-zone="playmat" aria-pressed="true">Tapete</button>
   <button data-zone="complex" aria-pressed="false">Complejo</button>
   <button data-zone="hq" aria-pressed="false">HQ</button>
@@ -123,6 +124,10 @@
           <p id="modern-required-groups" class="setup-note"></p>
         </div>
         <label class="setup-check"><input id="marvel-epic" type="checkbox"> Versión Epic del Mastermind</label>
+        <div id="marvel-leads-option" hidden>
+          <label class="setup-check"><input id="marvel-solo-leads" type="checkbox"> Respetar Always Leads en solitario</label>
+          <p class="setup-note">Variante opcional. Desmarcado: grupo libre, como indica el reglamento. Marcado: incluye el grupo que lidera el Mastermind si el Scheme lo permite. No añade grupos extra; el Scheme tiene prioridad.</p>
+        </div>
         <label>Suministros
           <select id="marvel-supplies"><option value="expanded">Incluir cartas especiales de las expansiones</option><option value="base">Bystanders, Wounds y Officers básicos</option></select>
         </label>
@@ -273,6 +278,18 @@
     <div id="reserve-list"></div>
   </div>
 </div>
+<div id="enemies-dialog" class="overlay" hidden role="dialog" aria-modal="true" aria-labelledby="enemies-title">
+  <div class="modal-box">
+    <div class="modal-head"><span id="enemies-title">Enemigos de esta partida</span><button id="enemies-close">Cerrar</button></div>
+    <div class="help-content">
+      <h2>Mastermind</h2><p id="enemies-mastermind"></p>
+      <h2>Scheme</h2><p id="enemies-scheme"></p>
+      <h2>Grupos de villanos</h2><p id="enemies-villains"></p>
+      <h2>Henchmen</h2><p id="enemies-henchmen"></p>
+      <p id="enemies-leads" class="setup-note"></p>
+    </div>
+  </div>
+</div>
 <div id="turn-dialog" class="overlay" hidden role="dialog" aria-modal="true" aria-labelledby="turn-title">
   <div class="modal-box"><div class="modal-head"><span id="turn-title">Turno</span><button id="turn-close">Cerrar</button></div>
     <div class="turn-content"><p id="turn-summary"></p><div id="turn-actions">
@@ -288,15 +305,15 @@
 </div>
 <script src="setup.js?v=7"></script>
 <script src="xfiles/setup.js?v=5"></script>
-<script src="games/marvel/setup.js?v=2"></script>
-<script src="games/modern/setup.js?v=3"></script>
+<script src="games/marvel/setup.js?v=3"></script>
+<script src="games/modern/setup.js?v=4"></script>
 <script src="games/encounters/setup.js?v=1"></script>
-<script src="games/setup.js?v=8"></script>
+<script src="games/setup.js?v=9"></script>
 <script src="game-config.js?v=9"></script>
 <script src="multiplayer-config.js?v=1"></script>
 <script src="access.js?v=1"></script>
 <script src="multiplayer.js?v=9"></script>
 <script src="backup.js?v=6"></script>
-<script src="app.js?v=39"></script>
+<script src="app.js?v=40"></script>
 </body>
 </html>

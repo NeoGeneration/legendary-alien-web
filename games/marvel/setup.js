@@ -88,7 +88,8 @@ const MarvelSetup = (() => {
     if(players<(scenario.minPlayers||1))throw new Error('Este Scheme necesita al menos '+scenario.minPlayers+' jugadores.');
     if(options.soloMode&&!['classic','advanced'].includes(options.soloMode))throw new Error('Modo solitario no válido.');
     const special=scenario.special;
-    const leads=players>1||mastermind.leadsSolo;
+    const soloAlwaysLeads=players===1&&options.soloAlwaysLeads===true;
+    const leads=players>1||soloAlwaysLeads||mastermind.leadsSolo;
     const villainLeads=leads?[...mastermind.villains]:[];
     const henchLeads=leads?[...mastermind.henchmen]:[];
     if(leads&&mastermind.villainChoices)villainLeads.push(mix([...mastermind.villainChoices])[0]);
@@ -400,7 +401,7 @@ const MarvelSetup = (() => {
     const horrorsRemaining=pool('b119a8');if(!coreOnly&&horrorsRemaining.length)side('Horrors · Reserva',take('b119a8',horrorsRemaining.length,true));
     for(let seat=1;seat<=players;seat++)add(game,'Mazo de jugador '+seat,mix(starters[seat-1]),seatZone(game,seat,'draw'));
     const setup={mastermind:mastermind.key,epic,heroes:heroKeys.map(k=>entry(k).name),villains:villainKeys.map(k=>entry(k).name),henchmen:henchKeys.map(k=>entry(k).name),
-      edition:'marvel-collection',collection:'all',supplies:expanded?'expanded':'base',soloMode:players===1?(options.soloMode||'classic'):null,
+      edition:'marvel-collection',collection:'all',soloAlwaysLeads,supplies:expanded?'expanded':'base',soloMode:players===1?(options.soloMode||'classic'):null,
       handSize,twists:twistCount,masterStrikes:strikeCount,bystanders:baseBystanders,hq:hqCount,notes};
     if(homeHeroes.length)setup.homeHeroes=homeHeroes.map(k=>entry(k).name);
     if(selectedCollections)setup.collections=[...selectedCollections];

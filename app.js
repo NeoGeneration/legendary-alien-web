@@ -9,6 +9,7 @@ const GAME = window.AlienGame || { id: 'alien', title: 'ALIEN', data: 'data.json
 const IS_XFILES = GAME.id === 'xfiles';
 const IS_COLLECTION = Boolean(GAME.collection);
 const IS_MODERN = ['marvel2','dc'].includes(GAME.id);
+const IS_MARVEL = ['marvel','marvel2'].includes(GAME.id);
 const IS_COMPACT = IS_XFILES || IS_COLLECTION;
 const GameSetup = IS_COLLECTION ? LegendarySetup.forGame(GAME.id) : IS_XFILES ? XFilesSetup : AlienSetup;
 const SAVE_KEY = GAME.saveKey;
@@ -1700,8 +1701,8 @@ addEventListener('keydown', e => {
     return;
   }
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.target.closest?.('input, textarea, [contenteditable="true"]')) { e.preventDefault(); undo(); return; }
-  if (e.key === 'Escape') { cancelHandGesture?.(); closeModal(); closeInspector(); cancelPlacement(); if (!$('#reserve-dialog').hidden) closeReserve(); $('#help').hidden = true; $('#setup').hidden = true; $('#room-dialog').hidden = true; $('#games-dialog').hidden = true; $('#turn-dialog').hidden = true; $('#menu').hidden = true; return; }
-  if (!$('#inspector').hidden || !$('#help').hidden || !$('#setup').hidden || !$('#room-dialog').hidden || !$('#games-dialog').hidden || !$('#turn-dialog').hidden || !$('#reserve-dialog').hidden) return;
+  if (e.key === 'Escape') { cancelHandGesture?.(); closeModal(); closeInspector(); cancelPlacement(); if (!$('#reserve-dialog').hidden) closeReserve(); $('#help').hidden = true; $('#setup').hidden = true; $('#room-dialog').hidden = true; $('#games-dialog').hidden = true; $('#turn-dialog').hidden = true; $('#enemies-dialog').hidden = true; $('#menu').hidden = true; return; }
+  if (!$('#inspector').hidden || !$('#help').hidden || !$('#setup').hidden || !$('#room-dialog').hidden || !$('#games-dialog').hidden || !$('#turn-dialog').hidden || !$('#enemies-dialog').hidden || !$('#reserve-dialog').hidden) return;
   if (e.target.closest?.('input, textarea, select, [contenteditable="true"]')) return;
   if (!$('#modal').hidden) {
     if (space && !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey && !e.isComposing) {
@@ -1886,7 +1887,26 @@ for (const link of document.querySelectorAll('#games-dialog a[data-game]')) link
   await online?.queue;
   save(); location.assign(link.href);
 };
+function updateEnemiesSummary() {
+  $('#btn-enemies').hidden=!IS_MARVEL;
+  if(!IS_MARVEL)return;
+  const setup=state?.setup;
+  const meta=GameSetup.modern||GameSetup.marvel;
+  const master=meta?.masterminds.find(m=>m.key===setup?.mastermind);
+  $('#enemies-mastermind').textContent=setup?.hiddenMastermind?'Por revelar':master?master.name+(setup.epic?' · Epic':''):'Sin preparar';
+  $('#enemies-scheme').textContent=setup?.title||'Sin preparar';
+  for(const kind of ['villains','henchmen'])$('#enemies-'+kind).textContent=setup?.[kind]?.length
+    ? setup[kind].join(' · ') : setup?'Esta partida no guardó los grupos elegidos.':'Prepara una partida para ver sus grupos.';
+  $('#enemies-leads').textContent=!setup?'':setup.hiddenMastermind?'El Mastermind se revela durante la partida.':setup.players>1
+    ? 'Always Leads se aplica en partidas de dos o más jugadores.'
+    : setup.soloAlwaysLeads?'Variante de solitario: Always Leads activado. Los grupos de arriba son los incluidos en esta preparación.'
+    : master?.leadsSolo?'Este Mastermind exige su grupo también en solitario.'
+    : 'Solitario: Always Leads no es obligatorio.'+(GAME.id==='marvel2'?' Si el Mastermind menciona su grupo habitual, aplica esas habilidades al grupo de villanos o Henchmen elegido en su lugar.':'');
+}
+$('#btn-enemies').onclick=()=>{updateEnemiesSummary();$('#enemies-dialog').hidden=false;$('#enemies-close').focus({preventScroll:true});};
+$('#enemies-close').onclick=()=>{$('#enemies-dialog').hidden=true;$('#btn-enemies').focus({preventScroll:true});};
 function updateTurnUI() {
+  updateEnemiesSummary();
   if (!IS_COMPACT) return;
   const seat = online?.room?.seat || 1;
   $('#turn-summary').textContent = state?.setup
@@ -2160,6 +2180,9 @@ function updateSetupSummary() {
       if(!scenario)return;
       $('#setup-scenario').value=scenario.id;
     }
+    $('#marvel-leads-option').hidden=!IS_MARVEL||players!==1;
+    $('#marvel-solo-leads').disabled=!IS_MARVEL||players!==1||scenario.special==='bodyguards';
+    const soloLeads=IS_MARVEL&&players===1&&$('#marvel-solo-leads').checked&&scenario.special!=='bodyguards';
     document.querySelectorAll('[data-collection-seat]').forEach(label=>{label.hidden=Number(label.dataset.collectionSeat)>players;});
     if(GameSetup.encounters) {updateEncountersSummary(players);return;}
     if(IS_MODERN) {
@@ -2179,8 +2202,8 @@ function updateSetupSummary() {
       if(randomOption)randomOption.disabled=manualGroups&&!hidden;
       if(randomOption?.disabled&&$('#marvel-mastermind').value==='random')$('#marvel-mastermind').value=GameSetup.modern.defaultMastermind;
       const m=hidden?null:GameSetup.modern.masterminds.find(m=>m.key===$('#marvel-mastermind').value);
-      const leads=players>1&&m;
-      const required={villain:[...new Set([...(scenario.villains||[]),...(leads?m.villains:[])])],henchmen:leads?m.henchmen:[]};
+      const groups=ModernLegendarySetup.requiredGroups(scenario,players,m,soloLeads);
+      const required={villain:groups.villains,henchmen:groups.henchmen};
       for(const kind of ['villain','henchmen']) {
         const manual=$(`#modern-${kind}-mode`).value==='manual';
         $(`#modern-${kind}-picker`).hidden=!manual;
@@ -2193,11 +2216,12 @@ function updateSetupSummary() {
         $(`#modern-${kind}-count`).textContent=`${count} de ${expected} grupos seleccionados · Los obligatorios están marcados`;
         valid&&=!manual||count===expected;
       }
+      if($('#modern-villain-mode').value==='manual'&&groups.villainChoices.length)valid&&=modernGroupInputs.villain.some(i=>i.checked&&groups.villainChoices.includes(i.value));
       const names=[...required.villain,...required.henchmen].map(k=>GameSetup.catalog().find(d=>d.key===k).name);
       const requiredHeroes=(scenario.heroesRequired||[]).map(k=>GameSetup.catalog().find(d=>d.key===k).name);
-      $('#modern-required-groups').textContent=(names.length?'Obligatorios: '+names.join(', ')+'. ':'')+(requiredHeroes.length?'Héroes obligatorios: '+requiredHeroes.join(', ')+'. ':'')+(leads&&m.villainChoices?'Always Leads: incluye Sinister Spider-Foes o Sinister Syndicate.':'');
+      $('#modern-required-groups').textContent=(names.length?'Obligatorios: '+names.join(', ')+'. ':'')+(requiredHeroes.length?'Héroes obligatorios: '+requiredHeroes.join(', ')+'. ':'')+(groups.villainChoices.length?'Always Leads: incluye '+groups.villainChoices.map(k=>GameSetup.catalog().find(d=>d.key===k).name).join(' o ')+'.':'')+(soloLeads?' El Scheme tiene prioridad; Always Leads no añade grupos adicionales.':'');
       $('#setup-submit').disabled=!valid;
-      $('#setup-summary').textContent=`${GAME.id==='dc'?'DC':'Segunda Edición'} · ${heroes} héroes · ${ModernLegendarySetup.count(scenario.twists,players)} Scheme Twists · 5 Master Strikes. ${players===1?'Solitario: 2 Henchmen en el mazo y 2 en la ciudad; se ignora Always Leads.':`${players+(scenario.extraVillains||0)} grupos de villanos. ${hidden?'El Mastermind se descubre durante la partida.':'Se respeta Always Leads.'}`} ${players>=4?'Warmup Round: no juegues carta del Villain Deck en el primer turno de cada jugador.':''} ${scenario.special==='liberation'?'Mankind Liberation Front: otros dos grupos de villanos y tres Bystanders en un mazo separado. ':''}Las cartas restantes quedan alrededor del tapete. Partida independiente de los demás juegos.`;
+      $('#setup-summary').textContent=`${GAME.id==='dc'?'DC':'Segunda Edición'} · ${heroes} héroes · ${players+(scenario.extraVillains||0)} grupos de villanos · ${ModernLegendarySetup.count(scenario.twists,players)} Scheme Twists · 5 Master Strikes. ${players===1?'Solitario: 2 Henchmen en el mazo y 2 en la ciudad. '+(soloLeads?'Variante: se aplica Always Leads.':'Se ignora Always Leads.'):(hidden?'El Mastermind se descubre durante la partida.':'Se respeta Always Leads.')} ${players>=4?'Warmup Round: no juegues carta del Villain Deck en el primer turno de cada jugador.':''} ${scenario.special==='liberation'?'Mankind Liberation Front: otros dos grupos de villanos y tres Bystanders en un mazo separado. ':''}Las cartas restantes quedan alrededor del tapete. Partida independiente de los demás juegos.`;
       return;
     }
     if(GAME.id==='marvel') {
@@ -2222,13 +2246,13 @@ function updateSetupSummary() {
         $('#setup-submit').disabled=manual&&selectedMarvelHeroes().length!==heroes;
         const filtered=marvelCollectionInputs.length>0;
         const pool=filtered?`${selectedMarvelCollections().join(', ')} · ${$('#setup-scenario').options.length} Schemes · ${Math.max(0,$('#marvel-mastermind').options.length-1)} Masterminds · ${marvelHeroInputs.length} héroes disponibles.`:'Toda la colección: 175 Schemes · 100 Masterminds · 285 héroes.';
-        $('#setup-summary').textContent=`${pool} ${heroes} grupos de héroes · ${twists} Scheme Twists · HQ: ${recipe.hq||5}. ${players===1?solo+' Se ignora Always Leads salvo que la carta diga expresamente lo contrario.':'Se aplica Always Leads; las instrucciones del Scheme tienen prioridad.'} Los mazos usan las colecciones elegidas. El resto de las cartas queda alrededor, fuera de partida.`;
+        $('#setup-summary').textContent=`${pool} ${heroes} grupos de héroes · ${twists} Scheme Twists · HQ: ${recipe.hq||5}. ${players===1?solo+(soloLeads?' Variante: se aplica Always Leads; el Scheme tiene prioridad.':' Se ignora Always Leads salvo que la carta diga expresamente lo contrario.'):'Se aplica Always Leads; las instrucciones del Scheme tienen prioridad.'} Los mazos usan las colecciones elegidas. El resto de las cartas queda alrededor, fuera de partida.`;
         return;
       }
       const heroes=scenario.heroes||(scenario.id==='civil-war'&&players===2?4:players===1?3:players===5?6:5);
       const bystanders=scenario.bystanders||[1,2,8,8,12][players-1];
       const twists=scenario.id==='civil-war'&&players>=4?5:scenario.twists||8;
-      $('#setup-summary').textContent=`Juego base original · ${heroes} grupos de héroes · HQ: 5 · Bystanders: ${30-bystanders} en reserva + ${bystanders} en el mazo de villanos · ${twists} Scheme Twists en el mazo${scenario.id==='killbots'?' + 3 junto al Scheme':''} · Wounds: ${scenario.id==='legacy-virus'?6*players:30} · Mano: 6. ${players===1?'Solitario clásico: 1 Master Strike; se ignora Always Leads.':'Se respeta Always Leads del Mastermind.'} El resto de la colección queda alrededor, fuera de partida.`;
+      $('#setup-summary').textContent=`Juego base original · ${heroes} grupos de héroes · HQ: 5 · Bystanders: ${30-bystanders} en reserva + ${bystanders} en el mazo de villanos · ${twists} Scheme Twists en el mazo${scenario.id==='killbots'?' + 3 junto al Scheme':''} · Wounds: ${scenario.id==='legacy-virus'?6*players:30} · Mano: 6. ${players===1?'Solitario clásico: 1 Master Strike. '+(soloLeads?'Variante: se aplica Always Leads; el Scheme tiene prioridad.':'Se ignora Always Leads.'):'Se respeta Always Leads del Mastermind.'} El resto de la colección queda alrededor, fuera de partida.`;
       return;
     }
     $('#setup-summary').textContent=GAME.id==='matrix'
@@ -2262,6 +2286,7 @@ $('#btn-setup').onclick = () => {
     $('#setup-players').value = state.setup.players;
     $('#setup-drones').checked = state.setup.expansionDrones;
     if(GAME.id==='marvel'||IS_MODERN) {
+      $('#marvel-solo-leads').checked=Boolean(state.setup.soloAlwaysLeads);
       if([...$('#marvel-mastermind').options].some(o=>o.value===state.setup.mastermind))$('#marvel-mastermind').value=state.setup.mastermind;
       $('#marvel-epic').checked=!$('#marvel-epic').disabled&&Boolean(state.setup.epic);
       $('#marvel-solo').value=state.setup.soloMode||'classic';
@@ -2298,7 +2323,7 @@ $('#btn-setup').onclick = () => {
 };
 $('#setup-close').onclick = () => { $('#setup').hidden = true; };
 $('#setup-players').onchange = updateSetupSummary;
-for(const selector of ['#marvel-mastermind','#marvel-epic','#marvel-supplies','#marvel-solo'])$(selector).onchange=updateSetupSummary;
+for(const selector of ['#marvel-mastermind','#marvel-epic','#marvel-supplies','#marvel-solo','#marvel-solo-leads'])$(selector).onchange=updateSetupSummary;
 $('#setup-scenario').onchange = () => {
   if(GameSetup.encounters)configureEncountersOptions();
   if(IS_COLLECTION && GAME.id==='matrix') {
@@ -2311,6 +2336,7 @@ $('#setup-scenario').onchange = () => {
 $('#setup-form').onsubmit = async e => {
   e.preventDefault();
   const options = { scenario: $('#setup-scenario').value, players: Number($('#setup-players').value), expansionDrones: $('#setup-drones').checked };
+  if(IS_MARVEL)options.soloAlwaysLeads=options.players===1&&!$('#marvel-solo-leads').disabled&&Boolean($('#marvel-solo-leads').checked);
   if(GameSetup.encounters)Object.assign(options,encountersOptions(options.players));
   if(GAME.id==='marvel')Object.assign(options,{mastermind:$('#marvel-mastermind').value,collection:'all',
     epic:Boolean($('#marvel-epic').checked),supplies:$('#marvel-supplies').value||'expanded',soloMode:$('#marvel-solo').value||'classic'});
