@@ -2154,10 +2154,12 @@ $('#btn-setup').onclick = () => {
     }
   }
   if (IS_COMPACT) {
-    // A browser controls one private hand; additional seats are provided by rooms.
-    for (const option of $('#setup-players').options) option.disabled = !online?.active && Number(option.value)>1;
-    if (!online?.active) $('#setup-players').value='1';
-    else $('#setup-players').value=String(Math.max(Number($('#setup-players').value), online.room.players.length));
+    // Collection setups may reserve seats before anyone joins a room.
+    // X-Files still needs a room to advance turns between private hands.
+    const minimum=online?.active?Math.max(1,online.room.players.length):1;
+    for (const option of $('#setup-players').options) option.disabled = Number(option.value)<minimum || (IS_XFILES&&!online?.active&&Number(option.value)>1);
+    if (IS_XFILES&&!online?.active) $('#setup-players').value='1';
+    else $('#setup-players').value=String(Math.max(Number($('#setup-players').value)||1,minimum));
   }
   updateSetupSummary();
   $('#setup-error').hidden = true;
