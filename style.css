@@ -60,12 +60,13 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--accent
 #placement { position: fixed; bottom: calc(var(--hand-h) + 8px); left: 8px; right: 8px; z-index: 12; display: flex;
   gap: 12px; align-items: center; justify-content: space-between; padding: 8px 10px; background: #20301b; border: 1px solid var(--accent); border-radius: 8px; }
 #placement span { font-size: 13px; }
-.placement-buttons { display: flex; gap: 6px; flex-shrink: 0; }
-.placement-buttons button { padding-inline: 10px; }
-@media (max-width: 420px) {
+.placement-buttons { display: flex; flex-wrap: wrap; gap: 6px; flex-shrink: 0; max-width: 100%; }
+.placement-buttons button { padding-inline: 10px; min-height: 44px; }
+@media (max-width: 600px) {
   #placement { flex-wrap: wrap; gap: 6px; }
   #placement > span { flex-basis: 100%; }
-  .placement-buttons { margin-left: auto; }
+  .placement-buttons { width: 100%; }
+  .placement-buttons button { flex: 1; padding-inline: 6px; }
 }
 .obj { position: absolute; transform-origin: 50% 50%; }
 .board, .tile, .playmat { background-size: 100% 100%; pointer-events: none; }

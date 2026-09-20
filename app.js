@@ -912,6 +912,7 @@ async function drawToHand(o, n) {
 
 // ---------- Acciones ----------
 function flip(o) {
+  if (!o) return;
   if (online?.active) return onlineAction({ type: 'flip', id: o.id });
   pushUndo();
   o.faceUp = !o.faceUp;
@@ -919,11 +920,27 @@ function flip(o) {
   renderObj(o); save();
 }
 
+function flipSelected() {
+  const selected = placement;
+  const o = selected?.kind === 'stack' && byId(selected.id);
+  if (o?.type !== 'stack' || !o.cards.length) return;
+  cancelPlacement();
+  if (online?.active) return onlineAction({ type: 'flip', id: o.id, one: Boolean(selected.one), version: o.v || 0 });
+  if (selected.one && o.cards.length > 1) {
+    pushUndo();
+    // A single selected card is revealed beside its deck, never merged into it.
+    addStack([o.cards.shift()], o.x + Math.max(sizeOf(o).w, sizeOf(o).h) + 0.3, o.z, !o.faceUp, o.scale, o.rot);
+    renderAll();
+  } else flip(o);
+  status('Volteada');
+}
+
 function updateActionFeedback(target, action) {
   if (inspectorTarget !== target || !target?.[action]) return;
   const { count, pending, failed } = target[action];
   const [done, waiting, error] = action === 'draw'
     ? ['Robadas', 'Robando…', 'Error al robar']
+    : action === 'rotate' ? ['Girado', 'Girando…', 'Error al girar']
     : ['Barajado', 'Barajando…', 'Error al barajar'];
   const feedback = $(`#${action}-feedback`);
   feedback.textContent = [
@@ -964,11 +981,29 @@ async function doShuffle(o) {
   return result;
 }
 
-function rotate(o, d) {
-  if (online?.active) return onlineAction({ type: 'rotate', id: o.id, angle: d });
-  pushUndo();
-  o.rot = (o.rot + d + 360) % 360;
-  renderObj(o); save();
+async function rotate(o, d) {
+  if (!o || o.type !== 'stack' || !o.cards.length) return;
+  const target = inspectorTarget?.id === o.id ? inspectorTarget : null;
+  const feedback = target?.rotate;
+  if (feedback) {
+    target.keepOpen = true;
+    feedback.pending++; feedback.failed = false;
+    updateActionFeedback(target, 'rotate');
+  }
+  let succeeded = true;
+  if (online?.active) succeeded = Boolean(await onlineAction({ type: 'rotate', id: o.id, angle: d }));
+  else {
+    pushUndo();
+    o.rot = (o.rot + d + 360) % 360;
+    renderObj(o); save();
+  }
+  if (feedback) {
+    feedback.pending--;
+    if (succeeded) feedback.count++;
+    else feedback.failed = true;
+    updateActionFeedback(target, 'rotate');
+  }
+  return succeeded;
 }
 
 function dealRow(o, n) {
@@ -1174,6 +1209,7 @@ function inspectObject(o) {
   if (o.type === 'stack') {
     const count = o.cards.length;
     inspectorTarget.draw = { count: 0, pending: 0, failed: false };
+    inspectorTarget.rotate = { count: 0, pending: 0, failed: false };
     if (count > 1) inspectorTarget.shuffle = { count: 0, pending: 0, failed: false };
     const current = () => byId(o.id);
     inspect(`${o.name || (count > 1 ? 'Mazo' : 'Carta')} · ${count} ${count === 1 ? 'carta' : 'cartas'}`,
@@ -1189,7 +1225,7 @@ function inspectObject(o) {
           ['Barajar', () => doShuffle(current()), true, 'shuffle-feedback'],
           ['Ver cartas', () => openSearch(current())]
         ] : []),
-        ['Girar', () => rotate(current(), 90)]
+        ['Girar', () => rotate(current(), 90), true, 'rotate-feedback']
       ]);
   } else if (o.type === 'bag') {
     inspect(o.name, null, [['Sacar ficha', () => spawnFromBag(o)], ['Mover', () => beginPlacement({ kind: 'stack', id: o.id })]]);
@@ -1229,6 +1265,8 @@ function beginPlacement(next) {
     : '1 carta seleccionada. Toca el destino.';
   $('#placement-actions').hidden = !o && next.kind !== 'hand';
   $('#placement-preview').hidden = o?.type !== 'stack' && next.kind !== 'hand';
+  $('#placement-flip').hidden = o?.type !== 'stack';
+  $('#placement-flip').setAttribute('aria-label', wholeDeck ? 'Voltear el mazo entero' : 'Voltear una carta');
   if (o) els.get(o.id)?.classList.add('selected');
   updateHandSelection();
   $('#placement').hidden = false;
@@ -1748,6 +1786,7 @@ $('#inspector').addEventListener('click', e => {
   inspectorPointerStarted = false;
 }, true);
 $('#cancel-placement').onclick = cancelPlacement;
+$('#placement-flip').onclick = flipSelected;
 $('#placement-preview').onclick = () => {
   const o = placement?.kind === 'stack' && byId(placement.id);
   if (o?.type === 'stack') openCardZoom(o.cards[0], o.faceUp, o.rot - 180);
