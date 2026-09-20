@@ -625,6 +625,16 @@ function sizeOf(o) {
   }
 }
 
+function displayPosition(o) {
+  if (GAME.id === 'dc' && o.type === 'counter' && o.resource === 'hope') {
+    const mat = state.objects.find(item => item.type === 'playmat' && item.board === 'dc');
+    // Place the right edge before the printed track and its arrows (2048px artwork).
+    // Render saved counters here too, without changing room or local game state.
+    if (mat) return { x: mat.x + (120 / 2048 - .5) * mat.width - sizeOf(o).w / 2, z: o.z };
+  }
+  return o;
+}
+
 function renderObj(o) {
   let el = els.get(o.id);
   if (!el) {
@@ -634,7 +644,7 @@ function renderObj(o) {
     els.set(o.id, el);
   }
   const { w, h } = sizeOf(o);
-  const { left, top } = toPx(o);
+  const { left, top } = toPx(displayPosition(o));
   el.className = 'obj ' + o.type;
   el.classList.toggle('selected', placement?.kind === 'stack' && placement.id === o.id);
   el.style.width = w * UNIT + 'px';
@@ -791,11 +801,12 @@ function fitObjects(objects, padding = 0) {
   if (!visible.length) return;
   const bounds = visible.map(o => {
     const size = sizeOf(o), a = (o.rot || 0) * Math.PI / 180;
+    const { x, z } = displayPosition(o);
     const frame = IS_COMPACT && o.type === 'player-zone' && o.labelOnly ? 1.42 : 1;
     const w = size.w * frame, h = size.h * frame;
     const dx = (Math.abs(w * Math.cos(a)) + Math.abs(h * Math.sin(a))) / 2;
     const dz = (Math.abs(w * Math.sin(a)) + Math.abs(h * Math.cos(a))) / 2;
-    return [o.x - dx, o.x + dx, o.z - dz, o.z + dz];
+    return [x - dx, x + dx, z - dz, z + dz];
   });
   fitBounds(Math.min(...bounds.map(b => b[0]))-padding, Math.max(...bounds.map(b => b[1]))+padding,
     Math.min(...bounds.map(b => b[2]))-padding, Math.max(...bounds.map(b => b[3]))+padding);
@@ -809,6 +820,10 @@ function focusZone(zone) {
   activeZone = zone;
   document.querySelectorAll('[data-zone]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.zone === zone)));
   const mat = state.objects.find(o => o.type === 'playmat');
+  if (zone === 'playmat' && mat && GAME.id === 'dc') {
+    fitObjects([mat, ...state.objects.filter(o => o.type === 'counter' && o.resource === 'hope')]);
+    return;
+  }
   if (IS_COLLECTION && !['playmat','all'].includes(zone)) {
     if (zone==='player') {
       const seat=online?.room?.seat||1, area=GameSetup.seatZone(state,seat,'play');
