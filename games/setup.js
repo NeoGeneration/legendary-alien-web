@@ -6,6 +6,29 @@ const LegendarySetup = (() => {
   const titles = { matrix: 'THE MATRIX', bond: 'JAMES BOND', marvel: 'MARVEL LEGENDARY', marvel2: 'MARVEL · 2ª EDICIÓN', dc: 'LEGENDARY DC', predator: 'PREDATOR', firefly: 'FIREFLY' };
   const engines = new Map();
   const copy = value => JSON.parse(JSON.stringify(value));
+  function discardZone(game,seat=1) {
+    // Alien's original zones use TTS IDs; seats follow the player camera views.
+    const alienZones=['23d999','4cd4b1','b9bc82','92bd05','fa5702'];
+    return game?.objects.find(o=>o.type==='player-zone'&&o.zone==='discard'&&
+      (o.playerId===seat||((!game.gameId||game.gameId==='alien')&&o.sourceId===alienZones[seat-1])));
+  }
+  function discardHand(game,hand,seat=1) {
+    const zone=discardZone(game,seat);
+    if(!zone)throw new Error('No hay zona de descarte para tu jugador.');
+    if(!hand.length)throw new Error('Tu mano está vacía.');
+    const scale=game.gameId&&game.gameId!=='alien'?1.12:1.47;
+    let target=game.objects.filter(o=>o.type==='stack'&&o.faceUp&&Math.hypot(o.x-zone.x,o.z-zone.z)<2.25*Math.min(o.scale||scale,scale)*.55)
+      .sort((a,b)=>(b.z_||0)-(a.z_||0))[0];
+    const count=hand.length;
+    if(target)target.cards.unshift(...hand.splice(0));
+    else {
+      target={type:'stack',id:game.nextId++,name:'Descarte de jugador '+seat,cards:hand.splice(0),
+        x:zone.x,z:zone.z,rot:zone.rot??180,scale,faceUp:true};
+      game.objects.push(target);
+    }
+    target.z_=Math.max(0,...game.objects.map(o=>o.z_||0))+1;
+    return `Descartadas ${count} ${count===1?'carta':'cartas'}`;
+  }
   function shuffle(cards, random = Math.random) {
     for (let i=cards.length-1; i>0; i--) { const j=Math.floor(random()*(i+1)); [cards[i],cards[j]]=[cards[j],cards[i]]; }
     return cards;
@@ -400,6 +423,6 @@ const LegendarySetup = (() => {
       get rules(){return data?.rules||[];},get marvel(){return data?.marvelSetups;},get modern(){return data?.modernSetups;},get encounters(){return data?.encountersSetups;}};
     engines.set(id,engine);return engine;
   }
-  return {titles,forGame};
+  return {titles,forGame,discardZone,discardHand};
 })();
 if (typeof module!=='undefined') module.exports=LegendarySetup;

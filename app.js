@@ -829,11 +829,40 @@ function screenToWorld(cx, cy) {
 }
 
 // ---------- Mano ----------
+let discardingHand=false;
+function updateHandActions() {
+  $('#hand-discard').disabled=discardingHand||xfilesPending||!state?.hand.length||!LegendarySetup.discardZone(state,online?.room?.seat||1)||Boolean(online?.active&&!online.connected);
+  $('#hand-discard').textContent=discardingHand?'Descartando…':'Descartar toda la mano';
+}
+async function discardEntireHand() {
+  updateHandActions();
+  if($('#hand-discard').disabled)return;
+  discardingHand=true;updateTurnUI();
+  $('#turn-feedback').textContent='Descartando…';$('#turn-feedback').classList.remove('error');
+  try {
+    if(online?.active) {
+      const result=await onlineAction({type:'discardHand'});
+      if(!result){$('#turn-feedback').textContent=$('#room-error').textContent;$('#turn-feedback').classList.add('error');return;}
+      $('#turn-feedback').textContent=result.message||'Mano descartada';
+    } else {
+      const next=clone(state);
+      const message=LegendarySetup.discardHand(next,next.hand,1);
+      pushUndo();state=next;renderAll();status(message);$('#turn-feedback').textContent=message;
+    }
+    cancelHandGesture?.();
+    if(placement?.kind==='hand')cancelPlacement();
+    closeInspector();hidePreview();
+    $('#turn-feedback').classList.remove('error');
+  } catch(error){status(error.message);$('#turn-feedback').textContent=error.message;$('#turn-feedback').classList.add('error');}
+  finally {discardingHand=false;updateTurnUI();}
+}
+$('#hand-discard').onclick=discardEntireHand;
 function renderHand() {
   hoveredHandCard = null;
   const box = $('#hand-cards');
   box.innerHTML = '';
   $('#hand-count').textContent = state.hand.length;
+  updateHandActions();
   if (!state.hand.length) {
     const hint = document.createElement('p');
     hint.textContent = 'Toca un mazo y elige «Robar» para llevar cartas a tu mano.';
@@ -1906,6 +1935,7 @@ function updateEnemiesSummary() {
 $('#btn-enemies').onclick=()=>{updateEnemiesSummary();$('#enemies-dialog').hidden=false;$('#enemies-close').focus({preventScroll:true});};
 $('#enemies-close').onclick=()=>{$('#enemies-dialog').hidden=true;$('#btn-enemies').focus({preventScroll:true});};
 function updateTurnUI() {
+  updateHandActions();
   updateEnemiesSummary();
   if (!IS_COMPACT) return;
   const seat = online?.room?.seat || 1;
@@ -1915,14 +1945,15 @@ function updateTurnUI() {
   for (const button of document.querySelectorAll('[data-xf-command]')) {
     if(button.dataset.xfCommand==='revealMastermind')button.hidden=!state?.setup?.hiddenMastermind;
     if(button.dataset.xfCommand==='fireflyNextEpisode')button.hidden=GAME.id!=='firefly'||state?.setup?.encountersVersion!==1||state.setup.episodeIndex>=2;
-    button.disabled = !state?.setup || Boolean(online?.active && !online.connected)
+    button.disabled = discardingHand || xfilesPending || !state?.setup || Boolean(online?.active && !online.connected)
       || (IS_XFILES && button.dataset.xfCommand === 'endTurn' && state.setup.turn !== seat);
   }
 }
 let xfilesPending = false;
 async function xfilesAction(action) {
-  if (xfilesPending) return;
+  if (xfilesPending || discardingHand) return;
   xfilesPending = true;
+  updateHandActions();
   $('#turn-feedback').textContent = 'Aplicando…';
   $('#turn-feedback').classList.remove('error');
   for (const button of document.querySelectorAll('[data-xf-command]')) button.disabled = true;

@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#0b0f0e">
 <meta name="robots" content="noindex, nofollow, noimageindex, nosnippet">
 <title>Legendary Encounters: Alien — Mesa</title>
-<link rel="stylesheet" href="style.css?v=28">
+<link rel="stylesheet" href="style.css?v=29">
 </head>
 <body class="access-locked">
 <main id="app-access">
@@ -30,7 +30,6 @@
 </header>
 <nav id="zones" aria-label="Zonas de la mesa">
   <button id="btn-games">Juegos</button>
-  <button id="btn-turn" hidden>Turno</button>
   <button data-zone="playmat" aria-pressed="true">Tapete</button>
   <button data-zone="complex" aria-pressed="false">Complejo</button>
   <button data-zone="hq" aria-pressed="false">HQ</button>
@@ -48,7 +47,10 @@
 <div id="placement" hidden><span id="placement-label" role="status">1 carta seleccionada. Toca el destino.</span><div class="placement-buttons"><button id="placement-flip" hidden>Voltear</button><button id="placement-preview" hidden>Ampliar</button><button id="placement-actions" hidden>Acciones</button><button id="cancel-placement">Cancelar</button></div></div>
 <div id="status" role="status" aria-live="polite"></div>
 <section id="hand" aria-label="Tu mano">
-  <button id="hand-toggle" aria-expanded="true" aria-controls="hand-cards"><span>Tu mano <b id="hand-count">0</b></span><span id="hand-toggle-label">Ocultar ↓</span></button>
+  <div id="hand-header">
+    <button id="hand-toggle" aria-expanded="true" aria-controls="hand-cards"><span>Tu mano <b id="hand-count">0</b></span><span id="hand-toggle-label">Ocultar ↓</span></button>
+    <button id="btn-turn" hidden>Turno</button>
+  </div>
   <div id="hand-cards"></div>
 </section>
 <div id="preview" hidden><img alt=""></div>
@@ -296,6 +298,7 @@
     <div class="turn-content"><p id="turn-summary"></p><div id="turn-actions">
       <button data-xf-command="draw" data-count="1">Robar 1</button><button data-xf-command="draw" data-count="6">Robar 6</button>
       <button data-xf-command="playHand">Jugar mi mano</button><button data-xf-command="endTurn">Terminar mi turno</button>
+      <button id="hand-discard" disabled>Descartar toda la mano</button>
       <button data-xf-command="conspiracy">Avanzar conspiración</button>
       <button data-xf-command="gain" data-resource="strike">Recibir herida</button>
       <button data-xf-command="gain" data-resource="belief">Ganar Creencia</button><button data-xf-command="gain" data-resource="doubt">Ganar Duda</button>
@@ -309,12 +312,12 @@
 <script src="games/marvel/setup.js?v=3"></script>
 <script src="games/modern/setup.js?v=4"></script>
 <script src="games/encounters/setup.js?v=1"></script>
-<script src="games/setup.js?v=9"></script>
+<script src="games/setup.js?v=10"></script>
 <script src="game-config.js?v=9"></script>
 <script src="multiplayer-config.js?v=1"></script>
 <script src="access.js?v=1"></script>
 <script src="multiplayer.js?v=9"></script>
 <script src="backup.js?v=6"></script>
-<script src="app.js?v=41"></script>
+<script src="app.js?v=42"></script>
 </body>
 </html>

@@ -106,8 +106,10 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--accent
 .counter button { padding: 0 5px; min-height: 30px; line-height: 1; }
 #hand { position: fixed; left: 0; right: 0; bottom: 0; height: var(--hand-h); background: var(--surface);
   border-top: 1px solid var(--line); display: flex; flex-direction: column; z-index: 9; padding-bottom: env(safe-area-inset-bottom); }
-#hand-toggle { display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; width: 100%; height: 44px;
-  background: transparent; border: 0; border-radius: 0; padding: 0 max(16px, env(safe-area-inset-right)) 0 max(16px, env(safe-area-inset-left)); text-align: left; }
+#hand-header { display: flex; align-items: center; flex-shrink: 0; gap: 8px; padding-right: max(12px, env(safe-area-inset-right)); }
+#hand-toggle { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex: 1; min-width: 0; height: 44px;
+  background: transparent; border: 0; border-radius: 0; padding: 0 8px 0 max(16px, env(safe-area-inset-left)); text-align: left; white-space: nowrap; }
+#hand-header #btn-turn { flex-shrink: 0; min-height: 44px; padding: 0 14px; }
 #hand-count { display: inline-block; margin-left: 7px; color: var(--accent); font-variant-numeric: tabular-nums; }
 #hand-toggle-label { color: #a6b6aa; font-size: 12px; }
 #hand-cards { flex: 1; min-height: 0; display: flex; gap: 8px; padding: 0 14px 10px; overflow-x: auto; align-items: center;
