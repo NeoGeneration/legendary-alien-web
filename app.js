@@ -624,9 +624,8 @@ function renderObj(o) {
     minus.setAttribute('aria-label', `Restar ${o.name || 'punto'}`);
     plus.setAttribute('aria-label', `Sumar ${o.name || 'punto'}`);
     minus.onpointerdown = plus.onpointerdown = e => e.stopPropagation();
-    minus.onclick = () => { if (!matchMedia('(pointer: coarse)').matches) changeCounter(o, -1); };
-    plus.onclick = () => { if (!matchMedia('(pointer: coarse)').matches) changeCounter(o, 1); };
-    el.onclick = () => { if (matchMedia('(pointer: coarse)').matches) inspectObject(o); };
+    minus.onclick = () => changeCounter(o, -1);
+    plus.onclick = () => changeCounter(o, 1);
     row.append(minus, val, plus);
     el.append(label, row);
   }
@@ -1238,7 +1237,7 @@ function refreshStackInspector(o) {
 }
 
 function inspectObject(o) {
-  if (!o) return;
+  if (!o || o.type === 'counter') return;
   inspectorTarget = { kind: 'object', id: o.id, version: o.v, name: o.name };
   if (o.type === 'stack') {
     const count = o.cards.length;
@@ -1265,13 +1264,6 @@ function inspectObject(o) {
     inspect(o.name, null, [['Sacar ficha', () => spawnFromBag(o)], ['Mover', () => beginPlacement({ kind: 'stack', id: o.id })]]);
   } else if (o.type === 'token') {
     inspect(o.name, null, [['Mover', () => beginPlacement({ kind: 'stack', id: o.id })], ['Eliminar ficha', () => deleteObj(o)]]);
-  } else if (o.type === 'counter') {
-    inspect(`${o.name || 'Contador'} · ${o.value}`, null, [
-      ['Sumar 1', async () => { await changeCounter(o, 1); inspectObject(byId(o.id)); }],
-      ['Restar 1', async () => { await changeCounter(o, -1); inspectObject(byId(o.id)); }]
-    ]);
-    $('#inspector').dataset.resource = o.resource || 'strikes';
-    $('#inspector-title').prepend(counterIcon(o.resource));
   }
 }
 
@@ -1369,7 +1361,7 @@ function placeAt(p) {
 
 // ---------- Menú contextual ----------
 function openMenu(o, cx, cy) {
-  if (o.type === 'player-zone') return;
+  if (o.type === 'player-zone' || o.type === 'counter') return;
   const m = $('#menu');
   m.innerHTML = '';
   const add = (label, fn) => {
