@@ -75,6 +75,7 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--accent
 .player-zone-art { position: absolute; inset: -21%; pointer-events: none;
   background-size: 107% 105%; background-position: center; border-radius: 5% / 3.5%; box-shadow: 0 2px 5px #0008; }
 .labeled-zone { border: 2px solid #637582; background: #18263088; display: flex; align-items: center; justify-content: center; color: #b8cbd8; font-size: 13px; text-align: center; }
+.labeled-zone[data-zone="victory"] { border-color: #b79b57; color: #ead59b; background: #312a1988; font-weight: 650; }
 /* Keep the play area in game state for turn actions, without drawing a box. */
 .labeled-zone[data-zone="play"] { display: none; }
 .playmat { border-radius: 1.8% / 4.2%; overflow: hidden; box-shadow: 0 8px 28px #0008; }

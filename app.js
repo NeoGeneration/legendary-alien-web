@@ -559,8 +559,12 @@ function renderObj(o) {
     el.style.backgroundImage = img ? `url("${img}")` : '';
     el.style.transform = `rotate(${o.rot - 180}deg)`;
     if (o.type === 'player-zone') {
-      if (o.labelOnly) el.dataset.zone = o.zone;
-      const zoneArt = IS_COMPACT && o.labelOnly && PLAYER_ZONE_ART[o.zone];
+      // Reuse the same drop area in existing saves without moving its cards.
+      const victory = ['marvel', 'marvel2'].includes(GAME.id) && o.zone === 'avatar';
+      const zone = victory ? 'victory' : o.zone;
+      const name = victory ? 'Victory Pile' : o.name;
+      if (o.labelOnly) el.dataset.zone = zone;
+      const zoneArt = IS_COMPACT && o.labelOnly && PLAYER_ZONE_ART[zone];
       if (zoneArt) {
         const art = document.createElement('div');
         art.className = 'player-zone-art';
@@ -569,11 +573,11 @@ function renderObj(o) {
         el.appendChild(art);
       } else if (o.labelOnly) {
         el.classList.add('labeled-zone');
-        const label = document.createElement('span'); label.textContent = o.name; el.appendChild(label);
+        const label = document.createElement('span'); label.textContent = name; el.appendChild(label);
       }
       el.setAttribute('role', 'img');
-      el.setAttribute('aria-label', `Zona de jugador: ${o.name}`);
-      el.title = `${o.name} · Coloca tus cartas aquí`;
+      el.setAttribute('aria-label', `Zona de jugador: ${name}`);
+      el.title = victory ? 'Pila de victoria · Villanos derrotados y Bystanders rescatados' : `${name} · Coloca tus cartas aquí`;
     }
     if (o.textureBounds) {
       const [x1, y1, x2, y2] = o.textureBounds;
