@@ -31,13 +31,13 @@
 <nav id="zones" aria-label="Zonas de la mesa">
   <button id="btn-games">Juegos</button>
   <button id="btn-turn" hidden>Turno</button>
-  <button id="btn-enemies" hidden>Enemigos</button>
   <button data-zone="playmat" aria-pressed="true">Tapete</button>
   <button data-zone="complex" aria-pressed="false">Complejo</button>
   <button data-zone="hq" aria-pressed="false">HQ</button>
   <button data-zone="player" aria-pressed="false">Jugador</button>
   <button data-zone="reserve" aria-pressed="false">Reserva</button>
   <button id="btn-fit" data-zone="all" aria-pressed="false">Toda la mesa</button>
+  <button id="btn-enemies" hidden>Configuración</button>
 </nav>
 <main id="viewport" aria-label="Mesa de juego"><div id="world"></div></main>
 <div id="zoom-controls" role="group" aria-label="Zoom">
@@ -280,10 +280,11 @@
 </div>
 <div id="enemies-dialog" class="overlay" hidden role="dialog" aria-modal="true" aria-labelledby="enemies-title">
   <div class="modal-box">
-    <div class="modal-head"><span id="enemies-title">Enemigos de esta partida</span><button id="enemies-close">Cerrar</button></div>
+    <div class="modal-head"><span id="enemies-title">Configuración de esta partida</span><button id="enemies-close">Cerrar</button></div>
     <div class="help-content">
       <h2>Mastermind</h2><p id="enemies-mastermind"></p>
       <h2>Scheme</h2><p id="enemies-scheme"></p>
+      <h2>Mazos de héroes</h2><p id="enemies-heroes"></p>
       <h2>Grupos de villanos</h2><p id="enemies-villains"></p>
       <h2>Henchmen</h2><p id="enemies-henchmen"></p>
       <p id="enemies-leads" class="setup-note"></p>
@@ -314,6 +315,6 @@
 <script src="access.js?v=1"></script>
 <script src="multiplayer.js?v=9"></script>
 <script src="backup.js?v=6"></script>
-<script src="app.js?v=40"></script>
+<script src="app.js?v=41"></script>
 </body>
 </html>

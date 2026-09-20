@@ -1895,7 +1895,7 @@ function updateEnemiesSummary() {
   const master=meta?.masterminds.find(m=>m.key===setup?.mastermind);
   $('#enemies-mastermind').textContent=setup?.hiddenMastermind?'Por revelar':master?master.name+(setup.epic?' · Epic':''):'Sin preparar';
   $('#enemies-scheme').textContent=setup?.title||'Sin preparar';
-  for(const kind of ['villains','henchmen'])$('#enemies-'+kind).textContent=setup?.[kind]?.length
+  for(const kind of ['heroes','villains','henchmen'])$('#enemies-'+kind).textContent=setup?.[kind]?.length
     ? setup[kind].join(' · ') : setup?'Esta partida no guardó los grupos elegidos.':'Prepara una partida para ver sus grupos.';
   $('#enemies-leads').textContent=!setup?'':setup.hiddenMastermind?'El Mastermind se revela durante la partida.':setup.players>1
     ? 'Always Leads se aplica en partidas de dos o más jugadores.'
