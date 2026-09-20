@@ -220,20 +220,132 @@ function roomError(message) {
   $('#room-error').hidden = !message;
 }
 
+const ROOM_GAMES={alien:'Alien',xfiles:'X-Files',...LegendarySetup.titles};
+const localGameKey=id=>id==='alien'?'lea-web-state-v1':id==='xfiles'?'lex-web-state-v1':`legendary-${id}-state-v1`;
+let savedRooms=[],roomLibraryBusy=false,roomLibraryRequest=0;
+function localGames() {
+  const entries=[];
+  for(const [gameId,gameTitle] of Object.entries(ROOM_GAMES)) {
+    try {
+      const game=JSON.parse(localStorage.getItem(localGameKey(gameId)));
+      if(game?.objects&&Array.isArray(game.hand))entries.push({local:true,gameId,gameTitle,title:game.setup?.title||'Mesa sin preparar'});
+    } catch {}
+  }
+  return entries;
+}
+function renderRoomLibrary() {
+  const list=$('#room-library-list');list.replaceChildren();
+  const groups=[['Individuales en este dispositivo',localGames()],['Salas abiertas',savedRooms.filter(r=>!r.closed&&!r.unavailable)],
+    ['Salas cerradas',savedRooms.filter(r=>r.closed&&!r.unavailable)],['Salas no disponibles',savedRooms.filter(r=>r.unavailable)]];
+  for(const [label,entries] of groups) {
+    if(!entries.length)continue;
+    const heading=document.createElement('h3');heading.textContent=label;list.append(heading);
+    for(const entry of entries) {
+      const row=document.createElement('article');row.className='saved-room';
+      const title=document.createElement('strong'),detail=document.createElement('small'),actions=document.createElement('div');
+      title.textContent=`${ROOM_GAMES[entry.gameId]||'Sala'} · ${entry.title||entry.code}`;
+      detail.textContent=entry.local?'Guardada en este navegador':[
+        entry.code,entry.players?.join(', '),entry.host?'Anfitrión':entry.seat?'Jugador '+entry.seat:'',
+        entry.updated?'Último cambio: '+new Date(entry.updated).toLocaleString('es-ES',{dateStyle:'short',timeStyle:'short'}):'',
+        entry.unavailable?'Ya no está disponible para esta sesión':entry.closed?'Cerrada · conserva la mesa y las manos':'Abierta',
+      ].filter(Boolean).join(' · ');
+      actions.className='saved-room-actions';
+      const button=(text,command)=>{
+        const b=document.createElement('button');b.textContent=text;b.disabled=roomLibraryBusy;
+        b.dataset.roomCommand=command;b.dataset.roomCode=entry.code||entry.gameId;
+        if(command==='delete')b.className='delete-room';
+        b.onclick=()=>roomLibraryAction(entry,command);actions.append(b);
+      };
+      if(entry.unavailable)button('Quitar de la lista','forget');
+      else {
+        button(entry.closed?'Ver partida':'Continuar','open');
+        if(entry.host)button(entry.closed?'Reabrir partida':'Cerrar partida',entry.closed?'reopen':'close');
+        if(entry.host||entry.local)button('Eliminar','delete');
+      }
+      row.append(title,detail,actions);list.append(row);
+    }
+  }
+}
+async function refreshRoomLibrary() {
+  const request=++roomLibraryRequest;
+  $('#room-library-message').textContent='Actualizando salas…';
+  $('#room-refresh').disabled=true;
+  if(!savedRooms.length)savedRooms=online.knownRooms().map(({token,...entry})=>entry);
+  renderRoomLibrary();
+  try {
+    const rooms=await online.list();if(request!==roomLibraryRequest)return;
+    savedRooms=rooms;$('#room-library-message').textContent=rooms.length?'':'Todavía no tienes salas guardadas aquí.';
+  } catch {
+    if(request!==roomLibraryRequest)return;
+    $('#room-library-message').textContent='No se ha podido actualizar. Se muestran las partidas guardadas en este dispositivo.';
+  } finally {
+    if(request===roomLibraryRequest){$('#room-refresh').disabled=roomLibraryBusy;renderRoomLibrary();}
+  }
+}
+function restoreIndividual(message,keepDialog=false) {
+  if(!online?.active)return;
+  online.leave();pendingRemote=null;
+  cancelHandGesture?.();cancelPlacement();clearDrag();closeInspector();closeModal();closeCardZoom();
+  state=individualState;undoStack=individualUndo;
+  individualState=null;individualUndo=null;
+  renderAll();updateRoomUI();focusZone('playmat');
+  $('#room-dialog').hidden=!keepDialog;status(message);
+}
+async function roomLibraryAction(entry,command) {
+  if(roomLibraryBusy)return;
+  const label=`${ROOM_GAMES[entry.gameId]||'Sala'} · ${entry.title||entry.code}`;
+  if(command==='delete'&&!confirm(entry.local?`¿Eliminar la partida individual «${label}» de este dispositivo? No se puede deshacer. Las salas se conservan.`
+    :`¿Eliminar definitivamente «${label}» (sala ${entry.code}) para todos los jugadores? Se borrarán la mesa, las manos y los códigos de recuperación. No se puede deshacer.`))return;
+  if(command==='close'&&!confirm(`¿Cerrar «${label}»? La mesa y las manos se conservan. Podrás reabrirla para seguir jugando.`))return;
+  roomLibraryBusy=true;$('#room-refresh').disabled=true;roomError('');renderRoomLibrary();
+  try {
+    await online.queue;
+    if(command==='forget')online.forget(entry.code);
+    else if(entry.local) {
+      if(command==='delete') {
+        if(entry.gameId===GAME.id) {
+          if(online.active){individualState=freshState();individualUndo=[];}
+          else {cancelHandGesture?.();cancelPlacement();clearDrag();closeInspector();closeModal();closeCardZoom();state=freshState();undoStack=[];renderAll();}
+        }
+        localStorage.removeItem(localGameKey(entry.gameId));
+      } else {
+        if(online.active)restoreIndividual('Has vuelto a tu partida individual.');
+        if(entry.gameId!==GAME.id){const url=new URL(location.href);url.searchParams.set('game',entry.gameId);url.hash='';location.assign(url.href);}
+        else $('#room-dialog').hidden=true;
+      }
+    } else if(command==='open') {
+      const session=online.saved(entry.code);
+      if(!session)throw new Error('No se encuentra tu sesión. Recupera tu código privado.');
+      const data=await online.request(`/rooms/${entry.code}`,session.token),gameId=data.room.gameId||'alien';
+      if(online.active&&online.code===entry.code){$('#room-dialog').hidden=true;return;}
+      if(online.active)restoreIndividual('La sala anterior sigue guardada.');
+      if(gameId!==GAME.id) {
+        save();const url=new URL(location.href);url.searchParams.set('game',gameId);url.hash='room='+entry.code;location.assign(url.href);
+      } else {online.start(data,session.token,session.name);$('#room-dialog').hidden=true;focusZone('playmat');}
+    } else {
+      const result=await online.manage(entry,command);
+      if(result.deleted&&online.active&&online.code===entry.code)restoreIndividual('Sala eliminada. Tu partida individual se conserva.',true);
+      else if(online.active&&online.code===entry.code)await online.poll();
+      status(command==='delete'?'Sala eliminada':command==='close'?'Partida cerrada; mesa y manos conservadas':'Partida reabierta');
+    }
+  } catch(error) {roomError(error.message);}
+  finally {roomLibraryBusy=false;await refreshRoomLibrary();}
+}
+
 function updateRoomUI() {
   updateTurnUI();
   const room = online?.active && online.room;
   $('#room-entry').hidden = Boolean(room);
   $('#room-current').hidden = !room;
-  $('#room-title').textContent = room ? `Sala ${room.code}` : 'Jugar con amigos';
+  $('#room-title').textContent = 'Mis partidas y salas';
   $('#btn-room').classList.toggle('connected', Boolean(room && online.connected));
   $('#btn-room').classList.toggle('disconnected', Boolean(room && !online.connected));
   $('#btn-room').title = room ? `Sala ${room.code} · ${online.connected ? 'Conectada' : 'Reconectando'}` : 'Jugar multijugador';
-  $('#btn-setup').disabled = Boolean(room && !room.host);
-  $('#btn-reset').disabled = Boolean(room && !room.host);
+  $('#btn-setup').disabled = Boolean(room && (!room.host||room.closed));
+  $('#btn-reset').disabled = Boolean(room && (!room.host||room.closed));
   $('#btn-undo').disabled = Boolean(room && (!room.canUndo || !online.connected));
   if (!room) return;
-  $('#room-connection').textContent = online.connected
+  $('#room-connection').textContent = room.closed?'Partida cerrada. El anfitrión puede reabrirla desde la lista.':online.connected
     ? `Conectados · Tu zona es Jugador ${room.seat}${room.host ? ' · Eres el anfitrión' : ''}`
     : 'Sin conexión. Reconectando… Tu partida está guardada.';
   const link = new URL(location.href); link.hash = `room=${room.code}`;
@@ -318,12 +430,15 @@ function initializeRooms() {
     },
     connection() { updateRoomUI(); },
     error: roomError,
+    unavailable(message) {restoreIndividual(message+' Tu partida individual se conserva.',true);refreshRoomLibrary();},
   });
   try { $('#room-name').value = localStorage.getItem('lea-room-name') || ''; } catch {}
   $('#btn-room').onclick = () => {
     updateRoomUI(); $('#room-dialog').hidden = false;
+    refreshRoomLibrary();
     $(online.active ? '#room-copy' : '#room-name').focus();
   };
+  $('#room-refresh').onclick=refreshRoomLibrary;
   $('#room-close').onclick = () => { $('#room-dialog').hidden = true; $('#btn-room').focus(); };
   let connecting = false;
   async function connect(create) {
@@ -335,6 +450,7 @@ function initializeRooms() {
     try {
       await (create ? online.create(name) : online.join($('#room-code').value, name));
       updateRoomUI(); focusZone('playmat');
+      refreshRoomLibrary();
       status(create ? 'Sala creada. Comparte el enlace y prepara la partida.' : 'Ya estás en la sala.');
     } catch (error) {
       roomError(error.status || !['TypeError', 'AbortError'].includes(error.name) ? error.message : 'No se pudo conectar al servidor de salas. Vuelve a intentarlo.');
@@ -354,13 +470,8 @@ function initializeRooms() {
   $('#room-leave').onclick = async () => {
     $('#room-leave').disabled = true;
     await online.queue;
-    online.leave(); pendingRemote = null;
-    cancelPlacement(); clearDrag(); closeInspector(); closeModal(); closeCardZoom();
-    state = individualState; undoStack = individualUndo;
-    individualState = null; individualUndo = null;
-    renderAll(); updateRoomUI(); focusZone('playmat');
-    $('#room-dialog').hidden = true; $('#room-leave').disabled = false;
-    status('Has vuelto a tu partida individual. La sala sigue guardada.');
+    restoreIndividual('Has vuelto a tu partida individual. La sala sigue guardada.');
+    $('#room-leave').disabled = false;
   };
   function openInvitation() {
     const code = new URLSearchParams(location.hash.slice(1)).get('room');
@@ -707,7 +818,7 @@ function focusZone(zone) {
     const bounds = [[-12, 12, -30, -13], [-43, -18, -31, -13], [18, 43, -31, -13], [30, 45, -18, 18], [-47, -33, -14, 23]];
     fitBounds(...bounds[(online?.room?.seat || 1) - 1]);
   }
-  else if (zone === 'reserve') fitBounds(-52, 47, 35, 66);
+  else if (zone === 'reserve') fitObjects(state.objects.filter(isReserveStack),2);
   else fitView();
 }
 
@@ -718,7 +829,8 @@ function manualView() {
 
 // The reserve index uses public stack names only, never hidden card faces.
 const RESERVE_GROUPS = IS_COLLECTION ? ['En la mesa','Actos','Personajes','Héroes','Villanos','Henchmen','Masterminds','Episodios','Avatares y roles','Mazos iniciales','Reservas','Transformaciones','Horrores y ambiciones','Fichas','Otros']
-  : ['Apoyos y enemigos', 'Temporadas', 'Evidencias', 'Personajes de la Academia', 'Agentes', 'Mazos iniciales', 'Otros'];
+  : IS_XFILES ? ['En la mesa', 'Apoyos y enemigos', 'Temporadas', 'Evidencias', 'Personajes de la Academia', 'Agentes', 'Mazos iniciales', 'Otros']
+  : ['En la mesa', 'Tripulación', 'Escenarios y etapas', 'Suministros', 'Mazos iniciales', 'Otros'];
 let reserveLimit=80;
 const RESERVE_NAMES = {
   SyndaciteEnemy: ['Syndicate Enemy', 'Enemigos del Sindicato'],
@@ -726,16 +838,27 @@ const RESERVE_NAMES = {
   Cliffhanger: ['Cliffhanger', 'Cliffhangers'], EndGame: ['End Game', 'Finales'],
 };
 function isReserveStack(o) {
-  return IS_COMPACT && o.type === 'stack' && o.cards.length > 0 && o.z >= 19;
+  return o.type === 'stack' && o.cards.length > 0 && (IS_COMPACT ? o.z >= 19 : o.z >= 35 || Math.abs(o.x) > 50);
 }
 function reserveInfo(o) {
   if(IS_COLLECTION) return {name:o.name||'Mazo',translation:'',group:Math.max(0,RESERVE_GROUPS.indexOf(o.group||'Otros'))};
+  if(!IS_XFILES) {
+    for(const scenario of GameSetup.scenarios) {
+      const stage=scenario.stages.indexOf(o.sourceId);
+      if(stage>=0)return {name:scenario.title+' · Etapa '+(stage+1),translation:'',group:2};
+      if(o.name===scenario.location||o.name===scenario.objectives)return {name:scenario.title+' · '+(o.name===scenario.location?'Localización':'Objetivos'),translation:'',group:2};
+    }
+    const supplies={'deck.strike':'Strikes · Heridas','deck.sergeant':'Sergeants · Sargentos','deck.hatchery':'Hatchery','deck.drone':'Drones','deck.drone_exp':'Drones · Expansión'};
+    const starter=['c42645','2ab6c4','a52092','ec2dd3','11f85b'].indexOf(o.sourceId);
+    const crew=GameSetup.scenarios.some(s=>s.crew.includes(o.name));
+    return {name:starter>=0?'Mazo de jugador '+(starter+1):supplies[o.name]||o.name?.replaceAll('_',' ')||'Mazo · '+(o.sourceId||o.id),translation:'',group:starter>=0?4:crew?1:o.name?.startsWith('deck.')?3:5};
+  }
   const key = o.key || '';
   const [name, translation = ''] = RESERVE_NAMES[key] || [o.name || 'Mazo'];
   const group = RESERVE_NAMES[key] ? 0 : /^Season\d$/.test(key) ? 1
     : /^Evidence\dDeck$/.test(key) ? 2 : /^Market\d$/.test(key) ? 3
     : GameSetup.avatars?.some(a => a.id === key) ? 4 : /StartingDeck$/.test(key) ? 5 : 6;
-  return { name, translation, group };
+  return { name, translation, group:group+1 };
 }
 function reserveEntries(query = '') {
   const normalize = text => text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
@@ -743,13 +866,13 @@ function reserveEntries(query = '') {
   const entries=IS_COLLECTION ? [
     ...state.objects.filter(o=>o.type==='stack').map(o=>({id:o.id,name:o.name||'Mazo',translation:isReserveStack(o)&&o.libraryReserve?'Fuera de partida':'',group:isReserveStack(o)?reserveInfo(o).group:0,count:o.cards.length})),
     ...GameSetup.catalog().filter(o=>!state.libraryTaken?.includes(o.key)).map(o=>({key:o.key,count:o.cards.length,...reserveInfo(o)})),
-  ] : state.objects.filter(isReserveStack).map(o => ({ id: o.id, count: o.cards.length, ...reserveInfo(o) }));
+  ] : state.objects.filter(o=>o.type==='stack'&&o.cards.length).map(o => ({ ...reserveInfo(o), id:o.id, count:o.cards.length, group:isReserveStack(o)?reserveInfo(o).group:0 }));
   return entries
     .filter(entry => words.every(word => normalize(`${entry.name} ${entry.translation} ${RESERVE_GROUPS[entry.group]}`).includes(word)))
     .sort((a, b) => a.group - b.group || (a.name === 'Syndicate Enemy' ? -1 : b.name === 'Syndicate Enemy' ? 1 : a.name.localeCompare(b.name, 'es', { numeric: true })));
 }
 function refreshReserve() {
-  if (!IS_COMPACT || $('#reserve-dialog').hidden) return;
+  if ($('#reserve-dialog').hidden) return;
   const body = $('#reserve-list');
   const focused = document.activeElement?.dataset.reserveAction;
   body.innerHTML = '';
@@ -774,7 +897,7 @@ function refreshReserve() {
       button.onclick = () => {
         if(entry.key) return addLibraryDeck(entry.key);
         const current = byId(entry.id);
-        if (!current || (!IS_COLLECTION&&!isReserveStack(current))) { refreshReserve(); return; }
+        if (!current || current.type!=='stack' || !current.cards.length) { refreshReserve(); return; }
         closeReserve(); manualView(); fitObjects([current], 2);
         if (action === 'inspect') { cancelPlacement(); inspectObject(current); }
         else status(entry.name);
@@ -808,7 +931,7 @@ async function addLibraryDeck(key) {
   finally{libraryPending=false;}
 }
 function openReserve() {
-  if (!state || !IS_COMPACT) return;
+  if (!state) return;
   closeInspector(); hidePreview(); $('#menu').hidden = true;
   $('#reserve-search').value = '';
   reserveLimit=80;
@@ -830,7 +953,7 @@ function screenToWorld(cx, cy) {
 // ---------- Mano ----------
 let discardingHand=false;
 function updateHandActions() {
-  $('#hand-discard').disabled=discardingHand||xfilesPending||!state?.hand.length||!LegendarySetup.discardZone(state,online?.room?.seat||1)||Boolean(online?.active&&!online.connected);
+  $('#hand-discard').disabled=discardingHand||xfilesPending||!state?.hand.length||!LegendarySetup.discardZone(state,online?.room?.seat||1)||Boolean(online?.active&&(!online.connected||online.room?.closed));
   $('#hand-discard').textContent=discardingHand?'Descartando…':'Descartar toda la mano';
 }
 async function discardEntireHand() {
@@ -1778,7 +1901,7 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) relea
 
 // Botones
 $('#btn-undo').onclick = undo;
-document.querySelectorAll('#zones [data-zone]').forEach(b => { b.onclick = () => IS_COMPACT && b.dataset.zone === 'reserve' ? openReserve() : focusZone(b.dataset.zone); });
+document.querySelectorAll('#zones [data-zone]').forEach(b => { b.onclick = () => b.dataset.zone === 'reserve' ? openReserve() : focusZone(b.dataset.zone); });
 $('#reserve-close').onclick = closeReserve;
 $('#reserve-search').oninput = () => {reserveLimit=80;refreshReserve();};
 $('#reserve-table').onclick = () => { closeReserve(); focusZone('reserve'); };
@@ -1909,20 +2032,49 @@ for (const link of document.querySelectorAll('#games-dialog a[data-game]')) link
   save(); location.assign(link.href);
 };
 function updateEnemiesSummary() {
-  $('#btn-enemies').hidden=!IS_MARVEL;
-  if(!IS_MARVEL)return;
+  $('#btn-enemies').hidden=false;
   const setup=state?.setup;
   const meta=GameSetup.modern||GameSetup.marvel;
+  const hasMastermind=IS_MARVEL||GAME.id==='dc';
   const master=meta?.masterminds.find(m=>m.key===setup?.mastermind);
+  for(const kind of ['mastermind','henchmen']) {
+    $('#enemies-'+kind).hidden=!hasMastermind;
+    $('#enemies-'+kind+'-label').hidden=!hasMastermind;
+  }
+  $('#enemies-scheme-label').textContent=hasMastermind?'Scheme':'Partida';
+  $('#enemies-heroes-label').textContent=IS_XFILES?'Personajes de la Academia':['alien','matrix','predator','firefly'].includes(GAME.id)?'Tripulación y personajes':'Mazos de héroes';
+  $('#enemies-villains').hidden=$('#enemies-villains-label').hidden=!hasMastermind&&GAME.id!=='bond';
   $('#enemies-mastermind').textContent=setup?.hiddenMastermind?'Por revelar':master?master.name+(setup.epic?' · Epic':''):'Sin preparar';
   $('#enemies-scheme').textContent=setup?.title||'Sin preparar';
   for(const kind of ['heroes','villains','henchmen'])$('#enemies-'+kind).textContent=setup?.[kind]?.length
     ? setup[kind].join(' · ') : setup?'Esta partida no guardó los grupos elegidos.':'Prepara una partida para ver sus grupos.';
-  $('#enemies-leads').textContent=!setup?'':setup.hiddenMastermind?'El Mastermind se revela durante la partida.':setup.players>1
+  if(setup&&IS_XFILES)$('#enemies-heroes').textContent=(setup.heroes||[]).map(n=>GameSetup.heroes[n-1]||'Personaje '+n).join(' · ');
+  const scenario=GameSetup.scenarios.find(s=>s.id===setup?.scenario);
+  if(setup&&GAME.id==='alien'&&scenario)$('#enemies-heroes').textContent=scenario.crewLabel;
+  if(setup&&GAME.id==='matrix'&&scenario)$('#enemies-heroes').textContent=Array.from({length:4},(_,i)=>GameSetup.catalog().find(o=>o.key==='Market'+((scenario.movie-1)*4+i+1))?.name).filter(Boolean).join(' · ');
+  $('#enemies-leads').textContent=!setup||!IS_MARVEL?'':setup.hiddenMastermind?'El Mastermind se revela durante la partida.':setup.players>1
     ? 'Always Leads se aplica en partidas de dos o más jugadores.'
     : setup.soloAlwaysLeads?'Variante de solitario: Always Leads activado. Los grupos de arriba son los incluidos en esta preparación.'
     : master?.leadsSolo?'Este Mastermind exige su grupo también en solitario.'
     : 'Solitario: Always Leads no es obligatorio.'+(GAME.id==='marvel2'?' Si el Mastermind menciona su grupo habitual, aplica esas habilidades al grupo de villanos o Henchmen elegido en su lugar.':'');
+  const details=$('#enemies-details');details.replaceChildren();
+  if(!setup)return;
+  const add=(label,value)=>{
+    if(value===undefined||value===null||value===''||Array.isArray(value)&&!value.length)return;
+    const heading=document.createElement('h2'),body=document.createElement('p');heading.textContent=label;
+    body.textContent=Array.isArray(value)?value.join(' · '):String(value);details.append(heading,body);
+  };
+  add('Jugadores',setup.players);
+  const names=(keys,entries)=>(keys||[]).map(key=>entries?.find(e=>(e.key||e.id)===key)?.name||key);
+  add('Agentes y avatares',names(setup.avatars,GameSetup.encounters?.avatars||GameSetup.avatars));
+  add('Temporadas',setup.seasons);
+  add('Etapas',names(setup.stages,GameSetup.encounters?.stages));
+  add('Episodios',names(setup.episodes,GameSetup.encounters?.episodes));
+  if(GAME.id==='alien')add('Drones',setup.expansionDrones?'Base y expansión':'Base');
+  add('Cartas por etapa',setup.hiveLayers||setup.conspiracyLayers||setup.matrixLayers||setup.bondLayers);
+  add('Villanos adicionales',setup.extraVillains);
+  add('Scheme Twists',setup.twists);add('Master Strikes',setup.masterStrikes);add('Bystanders',setup.bystanders);
+  add('Notas de la preparación',setup.notes);
 }
 $('#btn-enemies').onclick=()=>{updateEnemiesSummary();$('#enemies-dialog').hidden=false;$('#enemies-close').focus({preventScroll:true});};
 $('#enemies-close').onclick=()=>{$('#enemies-dialog').hidden=true;$('#btn-enemies').focus({preventScroll:true});};
@@ -1936,8 +2088,8 @@ function updateTurnUI() {
   for (const button of document.querySelectorAll('[data-xf-command]')) {
     if(button.dataset.xfCommand==='revealMastermind')button.hidden=!state?.setup?.hiddenMastermind;
     if(button.dataset.xfCommand==='fireflyNextEpisode')button.hidden=GAME.id!=='firefly'||state?.setup?.encountersVersion!==1||state.setup.episodeIndex>=2;
-    button.disabled = discardingHand || xfilesPending || !state?.setup || Boolean(online?.active && !online.connected)
-      || (IS_XFILES && button.dataset.xfCommand === 'endTurn' && state.setup.turn !== seat);
+    button.disabled = discardingHand || xfilesPending || !state?.setup || Boolean(online?.active && (!online.connected||online.room?.closed))
+      || (IS_XFILES && online?.active && button.dataset.xfCommand === 'endTurn' && state.setup.turn !== seat);
   }
 }
 let xfilesPending = false;
@@ -1954,7 +2106,12 @@ async function xfilesAction(action) {
       const response = await online.action({ type: IS_COLLECTION?'legendary':IS_XFILES?'xfiles':'alien', ...action }); message = response.message || 'Acción completada';
     } else {
       const next = clone(state);
+      if(action.command==='endTurn'&&next.setup)next.setup.turn=1;
       message = GameSetup.act(next, next.hand, 1, action);
+      if(action.command==='endTurn') {
+        next.setup.turn=1;
+        message=message.replace(/Turno del jugador \d+/,'Turno del jugador 1');
+      }
       pushUndo(); state = next; renderAll();
     }
     $('#turn-feedback').textContent = message; status(message);
@@ -2330,14 +2487,10 @@ $('#btn-setup').onclick = () => {
       state.setup.seasons.forEach((season, i) => { $(`#xf-season-${i+1}`).value=season; });
     }
   }
-  if (IS_COMPACT) {
-    // Collection setups may reserve seats before anyone joins a room.
-    // X-Files still needs a room to advance turns between private hands.
-    const minimum=online?.active?Math.max(1,online.room.players.length):1;
-    for (const option of $('#setup-players').options) option.disabled = Number(option.value)<minimum || (IS_XFILES&&!online?.active&&Number(option.value)>1);
-    if (IS_XFILES&&!online?.active) $('#setup-players').value='1';
-    else $('#setup-players').value=String(Math.max(Number($('#setup-players').value)||1,minimum));
-  }
+  // Every game can reserve places before friends join; local play controls seat 1.
+  const minimum=online?.active?Math.max(1,...online.room.players.map((p,i)=>p.seat||i+1)):1;
+  for (const option of $('#setup-players').options) option.disabled=Number(option.value)<minimum;
+  $('#setup-players').value=String(Math.max(Number($('#setup-players').value)||1,minimum));
   updateSetupSummary();
   $('#setup-error').hidden = true;
   $('#setup').hidden = false;
@@ -2385,7 +2538,8 @@ $('#setup-form').onsubmit = async e => {
   }
   try {
     const prepared = GameSetup.create(initial, options);
-    if (IS_COMPACT) GameSetup.draw(prepared, prepared.hand, 1, prepared.setup.handSize||6);
+    GameSetup.draw(prepared, prepared.hand, 1, prepared.setup.handSize||6);
+    prepared.setup.turn=1;
     pushUndo();
     cancelPlacement();
     closeInspector();

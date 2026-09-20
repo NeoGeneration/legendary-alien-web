@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#0b0f0e">
 <meta name="robots" content="noindex, nofollow, noimageindex, nosnippet">
 <title>Legendary Encounters: Alien — Mesa</title>
-<link rel="stylesheet" href="style.css?v=30">
+<link rel="stylesheet" href="style.css?v=31">
 </head>
 <body class="access-locked">
 <main id="app-access">
@@ -24,7 +24,7 @@
 <header id="toolbar">
   <strong><span>LEGENDARY ENCOUNTERS</span><b id="game-name">ALIEN</b></strong>
   <button id="btn-setup">Preparar</button>
-  <button id="btn-room" title="Jugar multijugador" aria-label="Sala multijugador">Sala</button>
+  <button id="btn-room" title="Mis partidas y salas" aria-label="Mis partidas y salas">Salas</button>
   <button id="btn-undo" title="Deshacer (Ctrl+Z)" aria-label="Deshacer">↶</button>
   <button id="btn-help" aria-label="Ayuda y opciones">?</button>
 </header>
@@ -62,9 +62,16 @@
 </div>
 <div id="room-dialog" class="overlay" hidden role="dialog" aria-modal="true" aria-labelledby="room-title">
   <div class="modal-box">
-    <div class="modal-head"><span id="room-title">Jugar con amigos</span><button id="room-close">Cerrar</button></div>
+    <div class="modal-head"><span id="room-title">Mis partidas y salas</span><button id="room-close">Cerrar</button></div>
     <div class="room-content">
+      <section id="room-library" aria-labelledby="room-library-title">
+        <div class="room-library-heading"><h2 id="room-library-title">Mis partidas</h2><button id="room-refresh">Actualizar</button></div>
+        <p class="setup-note">Partidas abiertas en este dispositivo. Para añadir una de otro dispositivo, recupera tu código privado desde ? → Continuar con mi código.</p>
+        <p id="room-library-message" role="status" aria-live="polite"></p>
+        <div id="room-library-list"></div>
+      </section>
       <div id="room-entry">
+        <h2>Crear o entrar en una sala</h2>
         <p>Comparte la mesa con hasta cinco jugadores. Cada uno conserva su mano privada.</p>
         <label for="room-name">Tu nombre</label>
         <input id="room-name" maxlength="24" autocomplete="nickname" placeholder="Cómo te llamas">
@@ -82,7 +89,7 @@
         <input id="room-link" readonly aria-label="Enlace de invitación">
         <button id="room-copy">Copiar enlace</button>
         <ol id="room-players" aria-label="Jugadores de la sala"></ol>
-        <p class="setup-note">Al cerrar o volver a tu partida individual, la sala conserva su propia partida, tu sitio y tu mano. Guarda este enlace y ábrelo en el mismo navegador para retomarla. El anfitrión prepara la mesa para todos.</p>
+        <p class="setup-note">Salir de este panel o volver a tu partida individual conserva la sala y tu mano. «Cerrar partida» la deja en pausa hasta que el anfitrión la reabra. «Eliminar» borra la sala para todos, previa confirmación.</p>
         <button id="room-leave">Volver a mi partida individual</button>
       </div>
       <p id="room-error" role="alert" hidden></p>
@@ -161,7 +168,7 @@
         </fieldset>
       </div>
       <p id="setup-summary"></p>
-      <p id="setup-description" class="setup-note">Prepara localización, objetivos, cuartel, 5 cartas en HQ y colmena. Después elige avatar y roba tu mano inicial.</p>
+      <p id="setup-description" class="setup-note">Prepara localización, objetivos, cuartel, 5 cartas en HQ y colmena. Baraja los mazos de jugador y reparte seis cartas a los jugadores presentes. Después elige tu avatar.</p>
       <p class="setup-note">Sustituye la mesa actual. Puedes recuperarla con Deshacer.</p>
       <fieldset id="collection-avatars" hidden><legend>Personajes de los jugadores</legend><div id="collection-avatar-fields"></div></fieldset>
       <p id="setup-error" role="alert" hidden></p>
@@ -272,7 +279,7 @@
     <div class="modal-head"><span id="reserve-title">Mazos de reserva</span><button id="reserve-close">Cerrar</button></div>
     <div class="reserve-tools">
       <label for="reserve-search">Buscar un mazo</label>
-      <input id="reserve-search" type="search" placeholder="Syndicate, temporada, evidencia…" autocomplete="off">
+      <input id="reserve-search" type="search" placeholder="Nombre del mazo, personaje o grupo…" autocomplete="off">
       <p>Toca el nombre para abrir sus acciones sin revelar las cartas.</p>
       <button id="reserve-table">Ver reserva en la mesa</button>
       <button id="reserve-add-all" hidden>Poner toda la colección en la mesa</button>
@@ -284,12 +291,13 @@
   <div class="modal-box">
     <div class="modal-head"><span id="enemies-title">Configuración de esta partida</span><button id="enemies-close">Cerrar</button></div>
     <div class="help-content">
-      <h2>Mastermind</h2><p id="enemies-mastermind"></p>
-      <h2>Scheme</h2><p id="enemies-scheme"></p>
-      <h2>Mazos de héroes</h2><p id="enemies-heroes"></p>
-      <h2>Grupos de villanos</h2><p id="enemies-villains"></p>
-      <h2>Henchmen</h2><p id="enemies-henchmen"></p>
+      <h2 id="enemies-mastermind-label">Mastermind</h2><p id="enemies-mastermind"></p>
+      <h2 id="enemies-scheme-label">Scheme</h2><p id="enemies-scheme"></p>
+      <h2 id="enemies-heroes-label">Mazos de héroes</h2><p id="enemies-heroes"></p>
+      <h2 id="enemies-villains-label">Grupos de villanos</h2><p id="enemies-villains"></p>
+      <h2 id="enemies-henchmen-label">Henchmen</h2><p id="enemies-henchmen"></p>
       <p id="enemies-leads" class="setup-note"></p>
+      <div id="enemies-details"></div>
     </div>
   </div>
 </div>
@@ -307,7 +315,7 @@
     <p id="turn-feedback" role="status" aria-live="polite"></p></div>
   </div>
 </div>
-<script src="setup.js?v=8"></script>
+<script src="setup.js?v=9"></script>
 <script src="xfiles/setup.js?v=5"></script>
 <script src="games/marvel/setup.js?v=3"></script>
 <script src="games/modern/setup.js?v=4"></script>
@@ -316,8 +324,8 @@
 <script src="game-config.js?v=10"></script>
 <script src="multiplayer-config.js?v=1"></script>
 <script src="access.js?v=1"></script>
-<script src="multiplayer.js?v=9"></script>
+<script src="multiplayer.js?v=10"></script>
 <script src="backup.js?v=6"></script>
-<script src="app.js?v=44"></script>
+<script src="app.js?v=45"></script>
 </body>
 </html>

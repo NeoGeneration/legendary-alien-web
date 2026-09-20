@@ -174,10 +174,17 @@ const AlienSetup = (() => {
     objectives.x = -19.8; objectives.z = 9.2; objectives.faceUp = true;
     // Face-up TTS stacks are serialized from the bottom; objective 1 goes on top.
     objectives.cards.reverse();
-    return {
+    const game = {
       schemaVersion: 4, objects: objects.filter(o => !removed.has(o.id)), hand: [], nextId,
-      setup: { scenario: scenario.id, title: scenario.title, players, expansionDrones: Boolean(options.expansionDrones), hiveLayers: layers.map(a => a.length) }
+      setup: { scenario: scenario.id, title: scenario.title, players, turn:1, handSize:6, expansionDrones: Boolean(options.expansionDrones), hiveLayers: layers.map(a => a.length) }
     };
+    // Only explicit preparation moves and shuffles starters; old saves are untouched.
+    for(let seat=1;seat<=players;seat++) {
+      const starter=find('sourceId',seats[seat-1].starter),zone=seatZone(game,seat,'draw');
+      Object.assign(starter,{x:zone.x,z:zone.z,rot:zone.rot,faceUp:false,name:'Mazo de jugador '+seat});
+      shuffle(starter.cards);
+    }
+    return game;
   }
   return { scenarios, dronesByPlayers, create,seatZone,draw,act,inPlayArea };
 })();

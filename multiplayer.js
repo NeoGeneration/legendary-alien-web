@@ -25,6 +25,49 @@ window.AlienRooms = class {
   saved(code) {
     try { return JSON.parse(localStorage.getItem(this.storageKey(code))); } catch { return null; }
   }
+  knownRooms() {
+    const entries=[];
+    for(let i=0;i<localStorage.length;i++) {
+      const key=localStorage.key(i);
+      if(!key?.startsWith('lea-room-session-v1:'))continue;
+      const code=key.slice('lea-room-session-v1:'.length),saved=this.saved(code);
+      if(/^[A-HJ-NP-Z2-9]{8}$/.test(code)&&/^[a-f0-9]{64}$/.test(saved?.token))entries.push({...saved.room,code,token:saved.token,name:saved.name});
+    }
+    return entries;
+  }
+  remember(room,title) {
+    try {
+      const saved=this.saved(room.code);if(!saved)return;
+      const next={...saved,room:{code:room.code,gameId:room.gameId||this.gameId,host:room.host,seat:room.seat,
+        revision:room.revision,closed:Boolean(room.closed),updated:room.updated||saved.room?.updated||Date.now(),
+        title:title||saved.room?.title||'Mesa sin preparar',players:room.players.map(p=>typeof p==='string'?p:p.name)}};
+      if(JSON.stringify(saved)!==JSON.stringify(next))localStorage.setItem(this.storageKey(room.code),JSON.stringify(next));
+    } catch {}
+  }
+  async list() {
+    const known=this.knownRooms();
+    if(!known.length)return [];
+    const rooms=[];
+    for(let i=0;i<known.length;i+=128) {
+      const data=await this.request('/rooms/list',this.token(),{sessions:known.slice(i,i+128).map(({code,token})=>({code,token}))});
+      rooms.push(...data.rooms);
+    }
+    rooms.sort((a,b)=>b.updated-a.updated);
+    for(const room of rooms)this.remember(room,room.title);
+    return [...rooms,...known.filter(k=>!rooms.some(r=>r.code===k.code)).map(({token,...entry})=>({...entry,unavailable:true}))];
+  }
+  forget(code) {
+    localStorage.removeItem(this.storageKey(code));localStorage.removeItem(`lea-resume-code-v1:${code}`);
+    for(const id of ['alien','xfiles','matrix','bond','marvel','marvel2','dc','predator','firefly'])
+      if(localStorage.getItem(`lea-last-room-v1:${id}`)===code)localStorage.removeItem(`lea-last-room-v1:${id}`);
+  }
+  async manage(entry,command) {
+    const session=this.saved(entry.code);
+    if(!session)throw new Error('No se encuentra tu sesión en esta sala.');
+    const result=await this.request(`/rooms/${entry.code}/manage`,session.token,{command,revision:entry.revision,...(command==='delete'?{confirm:entry.code}:{})});
+    if(result.deleted)this.forget(entry.code);
+    return result;
+  }
   token() { return Array.from(crypto.getRandomValues(new Uint8Array(32)), b => b.toString(16).padStart(2, '0')).join(''); }
   async request(path, token, body) {
     const controller = new AbortController();
@@ -38,7 +81,7 @@ window.AlienRooms = class {
       const data = await response.json();
       if (!response.ok) {
         if (data.code === 'APP_ACCESS_REQUIRED') window.AlienAccess.requireLogin();
-        const error = new Error(data.error || 'No se pudo completar la petición.'); error.status = response.status; throw error;
+        const error = new Error(data.error || 'No se pudo completar la petición.'); error.status = response.status; error.code=data.code; throw error;
       }
       return data;
     } finally { clearTimeout(timeout); }
@@ -110,6 +153,7 @@ window.AlienRooms = class {
     if (data.state) this.snapshotState = data.state;
     this.revision = data.room.revision;
     this.room = data.room;
+    this.remember(data.room,data.state?.setup?.title);
     this.connection(true);
     this.callbacks.snapshot(data);
   }
@@ -269,6 +313,10 @@ window.AlienRooms = class {
       if (this.active && generation === this.generation) this.receive(data);
     } catch (error) {
       if (this.active && generation === this.generation) {
+        if(error.code==='ROOM_UNAVAILABLE') {
+          this.stopLive();this.connection(false);
+          this.callbacks.unavailable?.(error.message);return;
+        }
         this.connection(false);
         if (error.status === 401) this.callbacks.error(error.message);
       }
@@ -285,6 +333,7 @@ window.AlienRooms = class {
     const run = async () => {
       if (!this.active || generation !== this.generation) throw new Error('Ya no estás en esa sala.');
       if (!this.connected) throw new Error('Sin conexión. Espera a que la sala se reconecte.');
+      if(this.room?.closed)throw new Error('La partida está cerrada. El anfitrión puede reabrirla desde Salas.');
       let data;
       for (let attempt = 0; attempt < 2; attempt++) {
         try { data = await this.request(`/rooms/${code}/action`, this.sessionToken, { ...body, since: this.revision, delta: true }); break; }
