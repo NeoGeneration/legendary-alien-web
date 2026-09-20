@@ -1,7 +1,7 @@
 'use strict';
 const requestedGame = new URL(location.href).searchParams.get('game');
 window.AlienGame = Object.hasOwn(LegendarySetup.titles,requestedGame)
-  ? { id: requestedGame, title: LegendarySetup.titles[requestedGame], collection: true, data: `games/${requestedGame}/data.json?v=${['matrix','marvel'].includes(requestedGame)?3:2}`, saveKey: `legendary-${requestedGame}-state-v1`, previousKey: `legendary-${requestedGame}-before-import-v1` }
+  ? { id: requestedGame, title: LegendarySetup.titles[requestedGame], collection: true, data: `games/${requestedGame}/data.json?v=${['matrix','marvel','marvel2'].includes(requestedGame)?3:2}`, saveKey: `legendary-${requestedGame}-state-v1`, previousKey: `legendary-${requestedGame}-before-import-v1` }
   : requestedGame === 'xfiles'
   ? { id: 'xfiles', title: 'X-FILES', data: 'xfiles/data.json?v=1', saveKey: 'lex-web-state-v1', previousKey: 'lex-web-before-import-v1' }
   : { id: 'alien', title: 'ALIEN', data: 'data.json?v=7', saveKey: 'lea-web-state-v1', previousKey: 'lea-web-before-import-v1' };
@@ -30,8 +30,8 @@ if (window.AlienGame.collection) {
   document.querySelector('#setup-description').textContent = game === 'matrix'
     ? 'Prepara la película, los tres actos, Zion, Dock y los personajes. Reparte seis cartas a cada jugador conectado.'
     : game === 'bond' ? 'Elige una película. Prepara el Mastermind, Scheme, villanos por etapas, Q Branch y los mazos de jugador. Reparte seis cartas a cada jugador conectado.'
-    : game === 'marvel' ? 'Preparación automática de los 175 Schemes y 100 Masterminds del mod, con 285 héroes y las reservas de las expansiones. Puedes elegir dificultad Epic y solitario clásico o avanzado.'
-    : game === 'marvel2' ? 'Segunda Edición: 550 cartas, 9 Schemes y 5 Masterminds, con sus versiones Epic. Preparación según las reglas de esta edición y guardado independiente. Se usa el tapete clásico.'
+    : game === 'marvel' ? 'Filtra por colecciones: Solo Core usa el juego base original. Elige tus héroes o déjalos al azar. Puedes elegir dificultad Epic y solitario clásico o avanzado.'
+    : game === 'marvel2' ? 'Segunda Edición: 550 cartas, 9 Schemes y 5 Masterminds, con sus versiones Epic. Elige héroes, villanos y Henchmen o déjalos al azar. Tapete de esta edición y guardado independiente.'
     : 'Abre la mesa y usa Reserva para traer los mazos del juego y sus expansiones. Sigue el reglamento para preparar el escenario.';
   document.querySelector('#turn-note').textContent = 'Los efectos, costes y avances de enemigos se resuelven manualmente. Terminar turno descarta la mano y las cartas jugadas, roba seis y reinicia Combate y Estrellas.';
   for (const button of document.querySelectorAll('[data-xf-command="gain"], [data-xf-command="conspiracy"]')) button.hidden = true;

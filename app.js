@@ -582,6 +582,14 @@ function renderObj(o) {
       el.setAttribute('role', 'img');
       el.setAttribute('aria-label', 'Tapete original de Legendary Encounters: ' + GAME.title);
     }
+    if(o.type==='playmat'&&o.textureProjection) {
+      // Display the user's unchanged photograph flat; all pixels stay in the original asset.
+      const [a,b,c,d,e,f,g,h]=o.textureProjection,W=w*UNIT,H=h*UNIT;
+      const photo=document.createElement('img');photo.src=img;photo.alt='Tapete de '+GAME.title;
+      photo.className='playmat-photo';photo.draggable=false;
+      photo.style.transform=`matrix3d(${[a,d*H/W,0,g/W,b*W/H,e,0,h/H,0,0,1,0,c*W,f*H,0,1].join(',')})`;
+      el.style.backgroundImage='';el.appendChild(photo);
+    }
   } else if (o.type === 'text') {
     el.className = 'obj text3d';
     el.textContent = o.text;
@@ -1914,19 +1922,66 @@ GameSetup.scenarios.forEach(scenario => {
   option.textContent = scenario.title;
   $('#setup-scenario').appendChild(option);
 });
+let marvelCollectionInputs=[],marvelHeroInputs=[];
+const modernGroupInputs={villain:[],henchmen:[]};
+function selectedMarvelCollections(){return marvelCollectionInputs.filter(i=>i.checked).map(i=>i.value);}
+function selectedMarvelHeroes(){return marvelHeroInputs.filter(i=>i.checked).map(i=>i.value);}
+function populateHeroChoices(heroes,selected=new Set()) {
+  $('#marvel-hero-list').innerHTML='';marvelHeroInputs=[];
+  for(const h of [...heroes].sort((a,b)=>a.name.localeCompare(b.name))) {
+    const label=document.createElement('label'),input=document.createElement('input');
+    label.className='setup-check';input.type='checkbox';input.value=h.key;input.checked=selected.has(h.key);
+    input.onchange=updateSetupSummary;label.appendChild(input);label.appendChild(document.createTextNode(h.name));
+    $('#marvel-hero-list').appendChild(label);marvelHeroInputs.push(input);
+  }
+  $('#marvel-hero-search').value='';
+  $('#marvel-hero-mode').onchange=updateSetupSummary;
+  $('#marvel-hero-search').oninput=()=>{
+    const search=$('#marvel-hero-search').value.toLocaleLowerCase();
+    for(const input of marvelHeroInputs)input.parentElement.hidden=!heroes.find(h=>h.key===input.value).name.toLocaleLowerCase().includes(search);
+  };
+}
+function filterMarvelSetup() {
+  const metadata=GameSetup.marvel,chosen=new Set(selectedMarvelCollections());
+  const fits=item=>chosen.has(MarvelSetup.collectionOf(item));
+  const schemes=$('#setup-scenario'),masters=$('#marvel-mastermind');
+  const previousScheme=schemes.value,previousMaster=masters.value,previousHeroes=new Set(selectedMarvelHeroes());
+  schemes.innerHTML='';masters.innerHTML='';
+  for(const s of [...metadata.schemes].filter(fits).sort((a,b)=>a.title.localeCompare(b.title))) {
+    const o=document.createElement('option');o.value=s.id;o.textContent=s.title;schemes.appendChild(o);
+  }
+  schemes.value=[...schemes.options].some(o=>o.value===previousScheme)?previousScheme:[...schemes.options].some(o=>o.value==='cosmic-cube')?'cosmic-cube':schemes.options[0]?.value||'';
+  const eligibleMasters=metadata.masterminds.filter(fits);
+  for(const m of [{key:'random',name:'Al azar entre los compatibles'},...eligibleMasters.sort((a,b)=>a.name.localeCompare(b.name))]) {
+    const o=document.createElement('option');o.value=m.key;o.textContent=m.name;masters.appendChild(o);
+  }
+  masters.value=eligibleMasters.some(m=>m.key===previousMaster)?previousMaster:eligibleMasters.some(m=>m.key==='889fb1')?'889fb1':'random';
+  $('#marvel-epic').disabled=!eligibleMasters.some(m=>m.epic);
+  if($('#marvel-epic').disabled)$('#marvel-epic').checked=false;
+  const limited=chosen.size<MarvelSetup.collections(metadata).length;
+  $('#marvel-supplies').disabled=limited;
+  if(limited)$('#marvel-supplies').value='base';
+  $('#marvel-collection-summary').textContent='Colecciones · '+(chosen.size===1?[...chosen][0]:chosen.size+' seleccionadas');
+  populateHeroChoices(metadata.heroes.filter(fits),previousHeroes);
+  $('#setup-error').textContent=chosen.size?'':'Elige al menos una colección.';
+  $('#setup-error').hidden=chosen.size>0;
+  $('#setup-submit').disabled=!chosen.size;
+  updateSetupSummary();
+}
 function populateMarvelSetup() {
   if(!GameSetup.marvel)return;
-  const schemes=$('#setup-scenario'),masterminds=$('#marvel-mastermind');
-  const previous=schemes.value;schemes.innerHTML='';masterminds.innerHTML='';
-  for(const s of [...GameSetup.marvel.schemes].sort((a,b)=>a.title.localeCompare(b.title))) {
-    const option=document.createElement('option');option.value=s.id;option.textContent=s.title;schemes.appendChild(option);
+  $('#marvel-options').hidden=false;$('#marvel-filters').hidden=false;
+  $('#marvel-supplies').value='base';$('#marvel-solo').value='classic';$('#marvel-hero-mode').value='random';
+  $('#marvel-collection-list').innerHTML='';marvelCollectionInputs=[];
+  for(const name of MarvelSetup.collections(GameSetup.marvel)) {
+    const label=document.createElement('label'),input=document.createElement('input');
+    label.className='setup-check';input.type='checkbox';input.value=name;input.checked=name==='Core';input.onchange=filterMarvelSetup;
+    label.appendChild(input);label.appendChild(document.createTextNode(name==='Core'?'Core · Juego base original':name));
+    $('#marvel-collection-list').appendChild(label);marvelCollectionInputs.push(input);
   }
-  schemes.value=GameSetup.marvel.schemes.some(s=>s.id===previous)?previous:'cosmic-cube';
-  for(const m of [{key:'random',name:'Al azar entre los compatibles'},...[...GameSetup.marvel.masterminds].sort((a,b)=>a.name.localeCompare(b.name))]) {
-    const option=document.createElement('option');option.value=m.key;option.textContent=m.name;masterminds.appendChild(option);
-  }
-  masterminds.value='889fb1';$('#marvel-options').hidden=false;
-  $('#marvel-supplies').value='expanded';$('#marvel-solo').value='classic';
+  $('#marvel-only-core').onclick=()=>{marvelCollectionInputs.forEach(i=>i.checked=i.value==='Core');filterMarvelSetup();};
+  $('#marvel-all-collections').onclick=()=>{marvelCollectionInputs.forEach(i=>i.checked=true);filterMarvelSetup();};
+  filterMarvelSetup();
 }
 function populateModernSetup() {
   const meta=GameSetup.modern,schemes=$('#setup-scenario'),masters=$('#marvel-mastermind');
@@ -1940,6 +1995,20 @@ function populateModernSetup() {
   }
   masters.value=meta.defaultMastermind;
   $('#marvel-options').hidden=false;$('#marvel-supplies').parentElement.hidden=true;$('#marvel-solo-label').hidden=true;
+  $('#marvel-filters').hidden=false;$('#marvel-collection-filter').hidden=true;
+  $('#marvel-hero-mode').value='random';$('#marvel-hero-mode').options[0].textContent='Al azar';
+  populateHeroChoices(meta.heroes);
+  $('#modern-group-options').hidden=false;
+  for(const [kind,group] of [['villain','Villanos'],['henchmen','Henchmen']]) {
+    $(`#modern-${kind}-mode`).value='random';$(`#modern-${kind}-mode`).onchange=updateSetupSummary;
+    $(`#modern-${kind}-list`).innerHTML='';modernGroupInputs[kind]=[];
+    for(const deck of GameSetup.catalog().filter(d=>d.group===group)) {
+      const label=document.createElement('label'),input=document.createElement('input');
+      label.className='setup-check';input.type='checkbox';input.value=deck.key;input.onchange=updateSetupSummary;
+      label.appendChild(input);label.appendChild(document.createTextNode(deck.name));
+      $(`#modern-${kind}-list`).appendChild(label);modernGroupInputs[kind].push(input);
+    }
+  }
   const reveal=document.createElement('button');reveal.textContent='Revelar Mastermind';reveal.dataset.xfCommand='revealMastermind';
   reveal.onclick=()=>xfilesAction({command:'revealMastermind'});$('#turn-actions').appendChild(reveal);
 }
@@ -1958,12 +2027,14 @@ if(IS_COLLECTION && GameSetup.avatars.length) {
 function updateSetupSummary() {
   if (!initial) return;
   let scenario = GameSetup.scenarios.find(s => s.id === $('#setup-scenario').value);
-  if (!scenario) return;
+  if (!scenario) {$('#setup-submit').disabled=true;return;}
+  $('#setup-submit').disabled=false;
   if(IS_COLLECTION) {
     const players=Number($('#setup-players').value);
     for(const option of $('#setup-scenario').options)option.disabled=players<(GameSetup.scenarios.find(s=>s.id===option.value)?.minPlayers||1);
     if(players<(scenario.minPlayers||1)) {
-      scenario=GameSetup.scenarios.find(s=>players>=(s.minPlayers||1));
+      scenario=GameSetup.scenarios.find(s=>players>=(s.minPlayers||1)&&[...$('#setup-scenario').options].some(o=>o.value===s.id));
+      if(!scenario)return;
       $('#setup-scenario').value=scenario.id;
     }
     document.querySelectorAll('[data-collection-seat]').forEach(label=>{label.hidden=Number(label.dataset.collectionSeat)>players;});
@@ -1971,25 +2042,58 @@ function updateSetupSummary() {
       const hidden=scenario.special==='bodyguards';
       $('#marvel-mastermind').disabled=hidden;
       const heroes=ModernLegendarySetup.count(scenario.heroes,players,[3,5,5,5,6][players-1])+(scenario.extraHeroes||0);
+      const manualHeroes=$('#marvel-hero-mode').value==='manual';
+      $('#marvel-hero-picker').hidden=!manualHeroes;
+      $('#marvel-hero-count').textContent=`${selectedMarvelHeroes().length} de ${heroes} héroes seleccionados`;
+      let valid=!manualHeroes||selectedMarvelHeroes().length===heroes;
+      const manualGroups=Object.keys(modernGroupInputs).some(k=>$(`#modern-${k}-mode`).value==='manual');
+      const randomOption=[...$('#marvel-mastermind').options].find(o=>o.value==='random');
+      if(randomOption)randomOption.disabled=manualGroups&&!hidden;
+      if(randomOption?.disabled&&$('#marvel-mastermind').value==='random')$('#marvel-mastermind').value=GameSetup.modern.defaultMastermind;
+      const m=hidden?null:GameSetup.modern.masterminds.find(m=>m.key===$('#marvel-mastermind').value);
+      const leads=players>1&&m;
+      const required={villain:[...new Set([...(scenario.villains||[]),...(leads?m.villains:[])])],henchmen:leads?m.henchmen:[]};
+      for(const kind of ['villain','henchmen']) {
+        const manual=$(`#modern-${kind}-mode`).value==='manual';
+        $(`#modern-${kind}-picker`).hidden=!manual;
+        for(const input of modernGroupInputs[kind]) {
+          input.disabled=required[kind].includes(input.value);
+          if(input.disabled)input.checked=true;
+        }
+        const count=modernGroupInputs[kind].filter(i=>i.checked).length;
+        const expected=Math.max(required[kind].length,kind==='villain'?players+(scenario.extraVillains||0):players>=4?2:1);
+        $(`#modern-${kind}-count`).textContent=`${count} de ${expected} grupos seleccionados · Los obligatorios están marcados`;
+        valid&&=!manual||count===expected;
+      }
+      const names=[...required.villain,...required.henchmen].map(k=>GameSetup.catalog().find(d=>d.key===k).name);
+      $('#modern-required-groups').textContent=(names.length?'Obligatorios: '+names.join(', ')+'. ':'')+(leads&&m.villainChoices?'Always Leads: incluye Sinister Spider-Foes o Sinister Syndicate.':'');
+      $('#setup-submit').disabled=!valid;
       $('#setup-summary').textContent=`Segunda Edición · ${heroes} héroes · ${ModernLegendarySetup.count(scenario.twists,players)} Scheme Twists · 5 Master Strikes. ${players===1?'Solitario: 2 Henchmen en el mazo y 2 en la ciudad; se ignora Always Leads.':`${players+(scenario.extraVillains||0)} grupos de villanos. ${hidden?'El Mastermind se descubre durante la partida.':'Se respeta Always Leads.'}`} ${players>=4?'Warmup Round: no juegues carta del Villain Deck en el primer turno de cada jugador.':''} Las cartas restantes quedan alrededor del tapete. Partida independiente de Marvel original.`;
       return;
     }
-    if(GAME.id==='marvel'||IS_MODERN) {
+    if(GAME.id==='marvel') {
       if(GameSetup.marvel) {
         const recipe=GameSetup.marvel.schemes.find(s=>s.id===scenario.id);
         const epic=$('#marvel-epic').checked;
+        const manual=$('#marvel-hero-mode').value==='manual';
         for(const option of $('#marvel-mastermind').options) {
           const m=GameSetup.marvel.masterminds.find(m=>m.key===option.value);
-          option.disabled=Boolean(m&&(MarvelSetup.compatible(recipe,m)||(epic&&!m.epic)));
+          option.disabled=option.value==='random'?manual:Boolean(m&&(MarvelSetup.compatible(recipe,m)||(epic&&!m.epic)));
         }
+        if(manual&&$('#marvel-mastermind').value==='random')$('#marvel-mastermind').value=[...$('#marvel-mastermind').options].find(o=>!o.disabled)?.value||'';
         const selected=GameSetup.marvel.masterminds.find(m=>m.key===$('#marvel-mastermind').value);
-        if(selected&&(MarvelSetup.compatible(recipe,selected)||(epic&&!selected.epic)))$('#marvel-mastermind').value='random';
+        if(!selected||MarvelSetup.compatible(recipe,selected)||(epic&&!selected.epic))$('#marvel-mastermind').value=[...$('#marvel-mastermind').options].find(o=>!o.disabled)?.value||'';
         const m=GameSetup.marvel.masterminds.find(m=>m.key===$('#marvel-mastermind').value);
-        const heroes=MarvelSetup.count(recipe.heroes,players,players===1?3:players===5?6:5)+MarvelSetup.count(recipe.extraHeroes,players)+(m?.extraHeroes||0);
+        const heroes=Math.max(MarvelSetup.count(recipe.heroes,players,players===1?3:players===5?6:5)+MarvelSetup.count(recipe.extraHeroes,players)+(m?.extraHeroes||0),recipe.heroTeams?.reduce((n,t)=>n+t[1],0)||0,new Set([...(recipe.heroesRequired||[]),...(m?.heroes||[])]).size);
         const twists=recipe.special==='chthon'&&m?.key==='8ac205'?1:MarvelSetup.count(recipe.twists,players);
         $('#marvel-solo-label').hidden=players!==1;
         const solo=$('#marvel-solo').value==='advanced'?'Solitario avanzado: 5 Master Strikes.':'Solitario clásico: 1 Master Strike.';
-        $('#setup-summary').textContent=`Toda la colección: 175 Schemes · 100 Masterminds · 285 héroes. ${heroes} grupos de héroes · ${twists} Scheme Twists · HQ: ${recipe.hq||5}. ${players===1?solo+' Se ignora Always Leads salvo que la carta diga expresamente lo contrario.':'Se aplica Always Leads; las instrucciones del Scheme tienen prioridad.'} Se preparan los mazos adicionales y las reservas que pide este Scheme. El resto de las cartas queda alrededor, fuera de partida.`;
+        $('#marvel-hero-picker').hidden=!manual;
+        $('#marvel-hero-count').textContent=`${selectedMarvelHeroes().length} de ${heroes} héroes seleccionados`;
+        $('#setup-submit').disabled=manual&&selectedMarvelHeroes().length!==heroes;
+        const filtered=marvelCollectionInputs.length>0;
+        const pool=filtered?`${selectedMarvelCollections().join(', ')} · ${$('#setup-scenario').options.length} Schemes · ${Math.max(0,$('#marvel-mastermind').options.length-1)} Masterminds · ${marvelHeroInputs.length} héroes disponibles.`:'Toda la colección: 175 Schemes · 100 Masterminds · 285 héroes.';
+        $('#setup-summary').textContent=`${pool} ${heroes} grupos de héroes · ${twists} Scheme Twists · HQ: ${recipe.hq||5}. ${players===1?solo+' Se ignora Always Leads salvo que la carta diga expresamente lo contrario.':'Se aplica Always Leads; las instrucciones del Scheme tienen prioridad.'} Los mazos usan las colecciones elegidas. El resto de las cartas queda alrededor, fuera de partida.`;
         return;
       }
       const heroes=scenario.heroes||(scenario.id==='civil-war'&&players===2?4:players===1?3:players===5?6:5);
@@ -2019,14 +2123,28 @@ function updateSetupSummary() {
 $('#btn-setup').onclick = () => {
   if (!state) return;
   if (state.setup) {
-    $('#setup-scenario').value = GameSetup.scenarios.some(s=>s.id===state.setup.scenario)?state.setup.scenario:GameSetup.scenarios[0].id;
+    if(GAME.id==='marvel'&&marvelCollectionInputs.length) {
+      const selected=new Set(state.setup.collections||['Core']);
+      marvelCollectionInputs.forEach(i=>i.checked=selected.has(i.value));filterMarvelSetup();
+      $('#marvel-hero-mode').value=state.setup.heroMode||'random';
+      marvelHeroInputs.forEach(i=>i.checked=(state.setup.heroKeys||[]).includes(i.value));
+    }
+    if([...$('#setup-scenario').options].some(o=>o.value===state.setup.scenario))$('#setup-scenario').value=state.setup.scenario;
     $('#setup-players').value = state.setup.players;
     $('#setup-drones').checked = state.setup.expansionDrones;
     if(GAME.id==='marvel'||IS_MODERN) {
-      $('#marvel-mastermind').value=state.setup.mastermind||(IS_MODERN?GameSetup.modern.defaultMastermind:'889fb1');
-      $('#marvel-epic').checked=Boolean(state.setup.epic);
+      if([...$('#marvel-mastermind').options].some(o=>o.value===state.setup.mastermind))$('#marvel-mastermind').value=state.setup.mastermind;
+      $('#marvel-epic').checked=!$('#marvel-epic').disabled&&Boolean(state.setup.epic);
       $('#marvel-solo').value=state.setup.soloMode||'classic';
-      $('#marvel-supplies').value=state.setup.supplies||'expanded';
+      if(!$('#marvel-supplies').disabled)$('#marvel-supplies').value=state.setup.supplies||'base';
+      if(IS_MODERN) {
+        $('#marvel-hero-mode').value=state.setup.heroMode||'random';
+        marvelHeroInputs.forEach(i=>i.checked=(state.setup.heroKeys||[]).includes(i.value));
+        for(const kind of ['villain','henchmen']) {
+          $(`#modern-${kind}-mode`).value=state.setup[kind+'Mode']||'random';
+          modernGroupInputs[kind].forEach(i=>i.checked=(state.setup[kind+'Keys']||[]).includes(i.value));
+        }
+      }
     }
     if(IS_COLLECTION && state.setup.avatars)state.setup.avatars.forEach((avatar,i)=>{$('#collection-avatar-'+(i+1)).value=avatar;});
     if (IS_XFILES) {
@@ -2062,7 +2180,13 @@ $('#setup-form').onsubmit = async e => {
   const options = { scenario: $('#setup-scenario').value, players: Number($('#setup-players').value), expansionDrones: $('#setup-drones').checked };
   if(GAME.id==='marvel')Object.assign(options,{mastermind:$('#marvel-mastermind').value,collection:'all',
     epic:Boolean($('#marvel-epic').checked),supplies:$('#marvel-supplies').value||'expanded',soloMode:$('#marvel-solo').value||'classic'});
-  if(IS_MODERN)Object.assign(options,{mastermind:$('#marvel-mastermind').value,epic:Boolean($('#marvel-epic').checked)});
+  if(GAME.id==='marvel'&&marvelCollectionInputs.length)Object.assign(options,{collections:selectedMarvelCollections(),
+    ...($('#marvel-hero-mode').value==='manual'?{heroKeys:selectedMarvelHeroes()}:{})});
+  if(IS_MODERN) {
+    Object.assign(options,{mastermind:$('#marvel-mastermind').value,epic:Boolean($('#marvel-epic').checked)});
+    if($('#marvel-hero-mode').value==='manual')options.heroKeys=selectedMarvelHeroes();
+    for(const kind of ['villain','henchmen'])if($(`#modern-${kind}-mode`).value==='manual')options[kind+'Keys']=modernGroupInputs[kind].filter(i=>i.checked).map(i=>i.value);
+  }
   if(IS_COLLECTION && GameSetup.avatars.length)options.avatars=Array.from({length:options.players},(_,i)=>$('#collection-avatar-'+(i+1)).value);
   if (IS_XFILES) Object.assign(options, {
     heroes: [...document.querySelectorAll('#xf-heroes input:checked')].map(input => Number(input.value)),

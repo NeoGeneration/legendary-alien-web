@@ -10,6 +10,8 @@ const MarvelSetup = (() => {
   const hqPoint = i => point([490,700,912,1126,1340][i] ?? 1340+(i-4)*212,1160);
   const classes = ['strength','instinct','covert','tech','ranged'];
   const classNames = ['Fuerza','Instinto','Encubierto','Tecnología','A distancia'];
+  const collectionOf=item=>[...(item.name||item.title||'').matchAll(/\(([^()]+)\)/g)].at(-1)?.[1]||'Core';
+  const collections=metadata=>[...new Set([...metadata.schemes,...metadata.masterminds,...metadata.heroes].map(collectionOf))].sort((a,b)=>a==='Core'?-1:b==='Core'?1:a.localeCompare(b));
   function compatible(scenario,mastermind) {
     if(['hidden-heart','tyrants','world-war-hulk','symbiotic'].includes(scenario.special)&&mastermind.adapting)
       return 'Este Scheme necesita un Mastermind con carta principal y cuatro tácticas.';
@@ -20,11 +22,22 @@ const MarvelSetup = (() => {
     if(metadata?.version!==1)throw new Error('Recarga la página para actualizar las preparaciones de Marvel.');
     const deckMap=new Map(data.objects.filter(o=>o.type==='stack').map(o=>[o.key,o]));
     const heroMap=new Map(metadata.heroes.map(h=>[h.key,h]));
+    const knownCollections=collections(metadata);
+    if(options.collections!==undefined&&!Array.isArray(options.collections))throw new Error('Elige al menos una colección válida.');
+    const selectedCollections=options.collections===undefined?null:new Set(options.collections);
+    if(selectedCollections&&(!Array.isArray(options.collections)||!selectedCollections.size||[...selectedCollections].some(c=>!knownCollections.includes(c))))throw new Error('Elige al menos una colección válida.');
+    const allowed=d=>!selectedCollections||selectedCollections.has(collectionOf(d));
+    if(!allowed(scenario))throw new Error('El Scheme no pertenece a las colecciones seleccionadas.');
+    if(options.heroKeys!==undefined&&!Array.isArray(options.heroKeys))throw new Error('Elige una lista de héroes.');
+    const manualHeroes=options.heroKeys===undefined?null:new Set(options.heroKeys);
+    if(manualHeroes&&(!Array.isArray(options.heroKeys)||manualHeroes.size!==options.heroKeys.length||[...manualHeroes].some(k=>!heroMap.has(k)||!allowed(heroMap.get(k)))))throw new Error('Elige héroes distintos de las colecciones seleccionadas.');
+    const coreOnly=selectedCollections?.size===1&&selectedCollections.has('Core');
     const pools=new Map(),blocked=new Set(),notes=[];
     const entry=key=>{const d=deckMap.get(key);if(!d)throw new Error('Falta un mazo de Marvel: '+key);return d;};
     const pool=key=>{if(!pools.has(key))pools.set(key,clone(entry(key).cards));return pools.get(key);};
     const mix=cards=>shuffle(cards,random);
     const take=(key,n,randomize=false)=>{
+      if(['Héroes','Villanos','Henchmen','Masterminds'].includes(entry(key).group)&&!allowed(entry(key)))throw new Error('La preparación necesita '+entry(key).name+'. Activa también su colección.');
       const cards=pool(key);n??=cards.length;
       if(n<0||!Number.isInteger(n)||n>cards.length)throw new Error('No hay suficientes cartas de '+entry(key).name+'.');
       if(randomize)mix(cards);
@@ -49,22 +62,26 @@ const MarvelSetup = (() => {
       x:p?.x??(-18-(sideIndex%3)*4),z:p?.z??(15-Math.floor(sideIndex++/3)*3),rot:180,scale:1,resource:'custom'});
     const choose=(group,n,required=[],preferred=[],filter=()=>true)=>{
       const keys=[...new Set(required)];
-      for(const key of keys)if(entry(key).group!==group||blocked.has(key)||!filter(entry(key)))
+      for(const key of keys)if(entry(key).group!==group||blocked.has(key)||!allowed(entry(key))||!filter(entry(key)))
         throw new Error('El Scheme y el Mastermind necesitan reservar el mismo grupo: '+entry(key).name+'.');
       n=Math.max(n,keys.length);
-      for(const key of preferred)if(keys.length<n&&!keys.includes(key)&&!blocked.has(key)&&filter(entry(key)))keys.push(key);
-      const candidates=mix([...deckMap.values()].filter(d=>d.group===group&&!blocked.has(d.key)&&!keys.includes(d.key)&&filter(d)));
+      for(const key of preferred)if(keys.length<n&&!keys.includes(key)&&!blocked.has(key)&&filter(entry(key))) {
+        if(!allowed(entry(key)))throw new Error('Always Leads necesita '+entry(key).name+'. Activa también su colección.');
+        keys.push(key);
+      }
+      const candidates=mix([...deckMap.values()].filter(d=>d.group===group&&allowed(d)&&!blocked.has(d.key)&&!keys.includes(d.key)&&filter(d)));
       keys.push(...candidates.slice(0,n-keys.length).map(d=>d.key));
       if(keys.length!==n)throw new Error('No hay suficientes grupos disponibles de '+group+'.');
       keys.forEach(k=>blocked.add(k));return keys;
     };
-    const chooseHero=(predicate=()=>true)=>choose('Héroes',1,[],[],d=>predicate(heroMap.get(d.key),d))[0];
+    const chooseHero=(predicate=()=>true,main=false)=>choose('Héroes',1,[],[],d=>predicate(heroMap.get(d.key),d)&&(!manualHeroes||(main?manualHeroes.has(d.key):!manualHeroes.has(d.key))))[0];
     const schemeNumber=Number(scenario.card.split('-')[1]);
     const epic=Boolean(options.epic);
-    const candidates=metadata.masterminds.filter(m=>!compatible(scenario,m)&&(!epic||m.epic));
+    const candidates=metadata.masterminds.filter(m=>allowed(m)&&!compatible(scenario,m)&&(!epic||m.epic));
     const selected=options.mastermind||'889fb1';
     const mastermind=selected==='random'?mix([...candidates])[0]:metadata.masterminds.find(m=>m.key===selected);
     if(!mastermind)throw new Error('Elige un Mastermind de la colección.');
+    if(!allowed(mastermind))throw new Error('El Mastermind no pertenece a las colecciones seleccionadas.');
     const incompatibility=compatible(scenario,mastermind);
     if(incompatibility)throw new Error(incompatibility);
     if(epic&&!mastermind.epic)throw new Error('Este Mastermind no tiene una versión Epic en el mod.');
@@ -86,13 +103,14 @@ const MarvelSetup = (() => {
     requiredHeroes.forEach(k=>blocked.add(k));
     const sideMasters=[];
     const pickMaster=()=>{
-      const remaining=metadata.masterminds.filter(m=>!m.adapting&&m.key!==mastermind.key&&!sideMasters.some(s=>s.key===m.key));
+      const remaining=metadata.masterminds.filter(m=>allowed(m)&&!m.adapting&&m.key!==mastermind.key&&!sideMasters.some(s=>s.key===m.key));
       if(!remaining.length)throw new Error('No quedan Masterminds compatibles con el Scheme.');
       const m=mix(remaining)[0];sideMasters.push(m);return m;
     };
     if(special==='symbiotic') {
       // The Scheme specifically asks for a Villain group, not a Henchman group.
-      const remaining=metadata.masterminds.filter(m=>!m.adapting&&m.key!==mastermind.key&&m.villains.length===1);
+      const remaining=metadata.masterminds.filter(m=>allowed(m)&&!m.adapting&&m.key!==mastermind.key&&m.villains.length===1);
+      if(!remaining.length)throw new Error('Activa otra colección con un Mastermind compatible con este Scheme.');
       const m=mix(remaining)[0];sideMasters.push(m);villainCount++;requiredVillains.push(...m.villains);
     }
     if(special==='world-war-hulk'||special==='tyrants')for(let i=0;i<3;i++)pickMaster();
@@ -128,29 +146,36 @@ const MarvelSetup = (() => {
     }
     const predicate=key=>heroMap.get(key);
     if(scenario.heroMatch==='nova')requiredHeroes.push('952177');
-    else if(scenario.heroMatch)requiredHeroes.push(chooseHero(h=>h.name.toLowerCase().includes(scenario.heroMatch)));
-    if(scenario.heroTeam)requiredHeroes.push(chooseHero(h=>h.team===scenario.heroTeam));
-    if(special==='two-hulks')requiredHeroes.push(chooseHero(h=>h.name.includes('Hulk')),chooseHero(h=>h.name.includes('Hulk')));
-    const homeHeroes=special==='heroes-homes'?Array.from({length:players},()=>chooseHero(h=>h.costReady)):[];
+    else if(scenario.heroMatch)requiredHeroes.push(chooseHero(h=>h.name.toLowerCase().includes(scenario.heroMatch),true));
+    if(scenario.heroTeam)requiredHeroes.push(chooseHero(h=>h.team===scenario.heroTeam,true));
+    if(special==='two-hulks')requiredHeroes.push(chooseHero(h=>h.name.includes('Hulk'),true),chooseHero(h=>h.name.includes('Hulk'),true));
+    const homeHeroes=special==='heroes-homes'?Array.from({length:players},()=>chooseHero(h=>h.costReady,true)):[];
     requiredHeroes.push(...homeHeroes);
     // The helper reserves candidates as it selects them. Required Heroes are
     // selected into the main deck now, so release those reservations only.
     requiredHeroes.forEach(k=>blocked.delete(k));
     const heroAllowed=d=>{
       const h=predicate(d.key);
+      if(manualHeroes&&!manualHeroes.has(d.key))return false;
       if(special==='divide-conquer'&&!h.classReady)return false;
       if(special==='nova-corps'&&h.name.toLowerCase().includes('nova')&&d.key!=='952177')return false;
       if(special==='two-hulks'&&h.name.includes('Hulk')&&!requiredHeroes.includes(d.key))return false;
       return true;
     };
     let heroKeys=[];
+    if(manualHeroes) {
+      const expected=Math.max(heroCount,new Set(requiredHeroes).size,scenario.heroTeams?.reduce((n,t)=>n+t[1],0)||0);
+      if(manualHeroes.size!==expected)throw new Error('Esta preparación necesita '+expected+' héroes. Has elegido '+manualHeroes.size+'.');
+      const missing=requiredHeroes.filter(k=>!manualHeroes.has(k));
+      if(missing.length)throw new Error('Incluye los héroes que exige la preparación: '+missing.map(k=>entry(k).name).join(', ')+'.');
+    }
     if(scenario.heroTeams) {
       for(const [team,n] of scenario.heroTeams) {
-        const fits=d=>team.startsWith('!')?predicate(d.key).team!==team.slice(1):predicate(d.key).team===team;
+        const fits=d=>heroAllowed(d)&&(team.startsWith('!')?predicate(d.key).team!==team.slice(1):predicate(d.key).team===team);
         heroKeys.push(...choose('Héroes',n,requiredHeroes.filter(k=>fits(entry(k))),[],fits));
       }
       // A Mastermind's additional Hero still applies to team-based schemes.
-      if(heroCount>heroKeys.length)heroKeys.push(...choose('Héroes',heroCount-heroKeys.length));
+      if(heroCount>heroKeys.length)heroKeys.push(...choose('Héroes',heroCount-heroKeys.length,[],[],heroAllowed));
     } else heroKeys=choose('Héroes',heroCount,[...new Set(requiredHeroes)],[],heroAllowed);
     heroCount=heroKeys.length;
     // Scheme requirements have priority over Always Leads when slots conflict.
@@ -161,15 +186,15 @@ const MarvelSetup = (() => {
     if(mastermind.timelineVariants)variantKey=choose('Villanos',1)[0];
     let heroDeck=mix(heroKeys.flatMap(k=>take(k)));
     const standardBystanders=take('eae6a5',30);
-    const expanded=options.supplies!=='base';
+    const expanded=options.supplies!=='base'&&(!selectedCollections||selectedCollections.size===knownCollections.length);
     const bystanders=expanded?mix([...standardBystanders,...take('f83db1'),...take('3050c9')]):standardBystanders;
     const allWounds=expanded?mix([...take('f49fdc',30),...take('28b1a8')]):take('f49fdc',30);
     const wounds=remove(allWounds,count(scenario.wounds,players,allWounds.length),'Wounds');
     // Unused wound copies stay outside the game, not in the active stack.
     const officers=expanded?mix([...take('49f6ff',30),...take('fab774')]):take('49f6ff',30);
     if(scenario.officers!==undefined)officers.splice(scenario.officers);
-    const sidekicks=mix([...take('43623a'),...(expanded?[...take('201e40'),...take('05355a')]:[])]);
-    const bindings=take('51c60e',count(scenario.bindings,players,30));
+    const sidekicks=coreOnly?[]:mix([...take('43623a'),...(expanded?[...take('201e40'),...take('05355a')]:[])]);
+    const bindings=coreOnly?[]:take('51c60e',count(scenario.bindings,players,30));
     const twists=take('c82082');
     let twistCount=special==='chthon'&&mastermind.key==='8ac205'?1:count(scenario.twists,players);
     let strikeCount=players===1&&options.soloMode!=='advanced'?1:5;
@@ -363,24 +388,27 @@ const MarvelSetup = (() => {
     add(game,'Bystanders',bystanders,special==='ferry'?{x:cityPoint(0).x,z:15}:point(1680,472),!expanded);
     add(game,'Wounds',wounds,point(1382,472),!expanded);
     add(game,'S.H.I.E.L.D. Officers',officers,point(176,1160),!expanded);
-    side('Sidekicks',sidekicks,false);side('Bindings',bindings,true);side('New Recruits',take('152f2d'),true);
-    if(special!=='shards')counter('Shards · Reserva',18);
-    counter('Shards · Mastermind',0,{x:-17,z:-1});
-    if(special!=='throne')counter('Throne’s Favor · 0 = sin dueño',0);
-    for(let seat=1;seat<=players;seat++) {
+    side('Sidekicks',sidekicks,false);side('Bindings',bindings,true);
+    if(!coreOnly)side('New Recruits',take('152f2d'),true);
+    if(!coreOnly&&special!=='shards')counter('Shards · Reserva',18);
+    if(!coreOnly)counter('Shards · Mastermind',0,{x:-17,z:-1});
+    if(!coreOnly&&special!=='throne')counter('Throne’s Favor · 0 = sin dueño',0);
+    for(let seat=1;!coreOnly&&seat<=players;seat++) {
       const strikesCounter=game.objects.find(o=>o.type==='counter'&&o.playerId===seat&&o.resource==='strikes');
       if(strikesCounter)game.objects.push({...strikesCounter,id:game.nextId++,name:'Shards',resource:'shards',value:0,z:strikesCounter.z-3});
     }
-    const horrorsRemaining=pool('b119a8');if(horrorsRemaining.length)side('Horrors · Reserva',take('b119a8',horrorsRemaining.length,true));
+    const horrorsRemaining=pool('b119a8');if(!coreOnly&&horrorsRemaining.length)side('Horrors · Reserva',take('b119a8',horrorsRemaining.length,true));
     for(let seat=1;seat<=players;seat++)add(game,'Mazo de jugador '+seat,mix(starters[seat-1]),seatZone(game,seat,'draw'));
     const setup={mastermind:mastermind.key,epic,heroes:heroKeys.map(k=>entry(k).name),villains:villainKeys.map(k=>entry(k).name),henchmen:henchKeys.map(k=>entry(k).name),
       edition:'marvel-collection',collection:'all',supplies:expanded?'expanded':'base',soloMode:players===1?(options.soloMode||'classic'):null,
       handSize,twists:twistCount,masterStrikes:strikeCount,bystanders:baseBystanders,hq:hqCount,notes};
     if(homeHeroes.length)setup.homeHeroes=homeHeroes.map(k=>entry(k).name);
+    if(selectedCollections)setup.collections=[...selectedCollections];
+    setup.heroMode=manualHeroes?'manual':'random';setup.heroKeys=heroKeys;
     Object.assign(game.setup,setup);
     if(notes.length)label(notes.join('\n'),{x:-35,z:38+Math.ceil(sideIndex/17)*6});
     return game;
   }
-  return {prepare,compatible,count};
+  return {prepare,compatible,count,collectionOf,collections};
 })();
 if(typeof module!=='undefined')module.exports=MarvelSetup;

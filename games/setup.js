@@ -101,7 +101,7 @@ const LegendarySetup = (() => {
       }
       if (id==='bond') return createBond(game,scenario,players,random);
       if (id==='marvel') {
-        const extended=options.collection==='all'||options.epic||options.soloMode==='advanced'||scenario.id.startsWith('scheme-')
+        const extended=options.collection==='all'||options.collections!==undefined||options.heroKeys!==undefined||options.epic||options.soloMode==='advanced'||scenario.id.startsWith('scheme-')
           || options.mastermind&&!['889fb1','f848b2','7c91e7','5da711','random'].includes(options.mastermind);
         if(extended) {
           const preparer=typeof module!=='undefined'?require('./marvel/setup.js'):MarvelSetup;

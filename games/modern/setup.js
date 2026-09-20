@@ -5,10 +5,22 @@
 const ModernLegendarySetup=(()=>{
   const clone=v=>JSON.parse(JSON.stringify(v));
   const count=(v,p,fallback=0)=>v===undefined?fallback:Array.isArray(v)?v[p-1]:v;
-  function positions(data) {
-    const mat=data.objects.find(o=>o.type==='playmat');
+  function project(matrix,x,y) {
+    const [a,b,c,d,e,f,g,h]=matrix,k=g*x+h*y+1;
+    return {x:(a*x+b*y+c)/k,y:(d*x+e*y+f)/k};
+  }
+  function positions(data,game) {
+    const mat=(game||data).objects.find(o=>o.type==='playmat');
+    const board=mat.board||(game?'classic':data.modernSetups.board);
     const pixel=(x,y,w,h)=>({x:mat.x+(x/w-.5)*mat.width,z:mat.z+(.5-y/h)*mat.height});
-    if(data.modernSetups.board==='dc') {
+    if(board==='marvel2') {
+      const p=(x,y)=>{const at=project(mat.textureProjection,x/2048,y/954);return pixel(at.x,at.y,1,1);};
+      return {mastermind:p(718,496),tactics:p(263,496),scheme:p(718,230),special:p(522,230),
+        officers:p(718,764),sidekicks:p(516,764),bystanders:p(1794,224),wounds:p(1610,224),
+        villain:p(1805,496),hero:p(1813,761),hq:i=>p([908,1083,1258,1433,1610][i],764),
+        city:i=>p([1600,1425,1250,1075,900][i],477)};
+    }
+    if(board==='dc') {
       const p=(x,y)=>pixel(x,y,2048,934);
       return {mastermind:p(716,482),scheme:p(716,212),officers:p(716,746),sidekicks:p(517,746),
         bystanders:p(1800,212),wounds:p(1612,212),villain:p(1800,482),hero:p(1800,746),
@@ -22,7 +34,7 @@ const ModernLegendarySetup=(()=>{
   function prepare({data,game,scenario,players,options,random,add,seatZone,shuffle}) {
     const meta=data.modernSetups;
     if(meta?.version!==1)throw new Error('Recarga la página para actualizar este juego.');
-    const p=positions(data),decks=new Map(data.objects.filter(o=>o.type==='stack').map(o=>[o.key,o]));
+    const p=positions(data,game),decks=new Map(data.objects.filter(o=>o.type==='stack').map(o=>[o.key,o]));
     const pools=new Map([...decks].map(([key,d])=>[key,clone(d.cards)]));
     const mix=cards=>shuffle(cards,random),notes=[],taken=new Set();
     const take=(key,n)=>{
@@ -41,6 +53,16 @@ const ModernLegendarySetup=(()=>{
       if(keys.length!==n)throw new Error('Faltan grupos de '+group+'.');
       return keys;
     };
+    const selection=(field,group,n,required=[])=>{
+      const selected=options[field];
+      if(selected===undefined)return choose(group,n,required);
+      if(!Array.isArray(selected)||new Set(selected).size!==selected.length||selected.some(k=>decks.get(k)?.group!==group))throw new Error('Selección no válida de '+group+'.');
+      const expected=Math.max(n,new Set(required).size);
+      if(selected.length!==expected)throw new Error('Elige '+expected+' grupos de '+group+'.');
+      const missing=required.filter(k=>!selected.includes(k));
+      if(missing.length)throw new Error('El Scheme o Always Leads exige incluir '+missing.map(k=>decks.get(k).name).join(', ')+'.');
+      return [...selected];
+    };
     let sideSlot=0;
     const label=(name,pos)=>game.objects.push({type:'text',id:game.nextId++,text:name,name,fontSize:24,rot:0,scale:1,...pos});
     const side=(name,cards,faceUp=true,pos)=>{
@@ -55,12 +77,16 @@ const ModernLegendarySetup=(()=>{
     const requiredVillains=[...(scenario.villains||[])],requiredHenchmen=[];
     if(players>1&&m) {
       for(const key of m.villains||[])if(!requiredVillains.includes(key))requiredVillains.push(key);
-      if(m.villainChoices)requiredVillains.push(mix([...m.villainChoices])[0]);
+      if(m.villainChoices) {
+        const choices=Array.isArray(options.villainKeys)?m.villainChoices.filter(k=>options.villainKeys.includes(k)):m.villainChoices;
+        if(!choices.length)throw new Error('Always Leads exige incluir '+m.villainChoices.map(k=>decks.get(k).name).join(' o ')+'.');
+        requiredVillains.push(mix([...choices])[0]);
+      }
       requiredHenchmen.push(...m.henchmen||[]);
     }
-    const heroKeys=choose('Héroes',count(scenario.heroes,players,[3,5,5,5,6][players-1])+(scenario.extraHeroes||0),scenario.heroesRequired||[]);
-    const villainKeys=choose('Villanos',players+(scenario.extraVillains||0),requiredVillains);
-    const henchKeys=choose('Henchmen',players>=4?2:1,requiredHenchmen);
+    const heroKeys=selection('heroKeys','Héroes',count(scenario.heroes,players,[3,5,5,5,6][players-1])+(scenario.extraHeroes||0),scenario.heroesRequired||[]);
+    const villainKeys=selection('villainKeys','Villanos',players+(scenario.extraVillains||0),requiredVillains);
+    const henchKeys=selection('henchmenKeys','Henchmen',players>=4?2:1,requiredHenchmen);
     const extraVillains=scenario.special==='liberation'?choose('Villanos',2,[],villainKeys):[];
     const bystanders=mix(take('bystanders')),officers=mix(take('officers'));
     const bystanderCount=[1,2,8,8,16][players-1]+(scenario.extraBystanders||0);
@@ -80,13 +106,13 @@ const ModernLegendarySetup=(()=>{
       const cards=take(m.key),face=cards.shift();
       if(epic)[face.face,face.back]=[face.back,face.face];
       add(game,'Mastermind',[face],p.mastermind,true);
-      side('Mastermind Tactics',mix(cards),false,{x:p.mastermind.x-5,z:p.mastermind.z});
+      side('Mastermind Tactics',mix(cards),false,p.tactics||{x:p.mastermind.x-5,z:p.mastermind.z});
     }
     if(concealed) {
       side('Bodyguards',officers.splice(0,3),true,p.mastermind);
       notes.push('Enshrouded Identity: no hay Mastermind ni Always Leads al empezar. Al derrotar todos los Bodyguards, usa «Revelar Mastermind» en Turno.');
     }
-    if(scenario.special==='killgorithm')side('Killgorithm',take('twists',1),true,{x:p.scheme.x-5,z:p.scheme.z});
+    if(scenario.special==='killgorithm')side('Killgorithm',take('twists',1),true,p.special||{x:p.scheme.x-5,z:p.scheme.z});
     if(scenario.special==='labors')side('Labor of Superman',wounds.splice(0,1),true,{x:p.scheme.x-5,z:p.scheme.z});
     if(scenario.special==='liberation')side('Mankind Liberation Front',mix([...extraVillains.flatMap(k=>take(k)),...bystanders.splice(0,3)]),false);
     if(scenario.special==='bizarro') {
@@ -122,7 +148,9 @@ const ModernLegendarySetup=(()=>{
     for(let seat=1;seat<=players;seat++)add(game,'Mazo de jugador '+seat,mix([...take('agents',8),...take('troopers',4)]),seatZone(game,seat,'draw'));
     game.setup={...game.setup,edition:game.gameId,mastermind:m?.key||null,epic,handSize:6,twists,masterStrikes:5,bystanders:bystanderCount,
       heroes:heroKeys.map(k=>decks.get(k).name),villains:villainKeys.map(k=>decks.get(k).name),henchmen:henchKeys.map(k=>decks.get(k).name),
-      extraVillains:extraVillains.map(k=>decks.get(k).name),soloMode:players===1?'modern':null,hiddenMastermind:concealed,notes};
+      extraVillains:extraVillains.map(k=>decks.get(k).name),soloMode:players===1?'modern':null,hiddenMastermind:concealed,notes,
+      heroKeys,villainKeys,henchmenKeys:henchKeys,heroMode:options.heroKeys?'manual':'random',
+      villainMode:options.villainKeys?'manual':'random',henchmenMode:options.henchmenKeys?'manual':'random'};
     label(notes.join('\n'),{x:-22,z:36});
     // Every unused physical card remains available outside the active setup.
     const groups=['Reservas','Masterminds','Villanos','Henchmen','Héroes','Transformaciones','Mazos iniciales'];
@@ -142,14 +170,14 @@ const ModernLegendarySetup=(()=>{
     const m=data.modernSetups.masterminds[Math.floor(random()*data.modernSetups.masterminds.length)];
     const source=game.objects.find(o=>o.key===m.key&&o.cards?.length===5);
     if(!source)throw new Error('Devuelve a Reserva las cinco cartas de '+m.name+' antes de revelarlo.');
-    const cards=source.cards.splice(0),face=cards.shift(),p=positions(data);
+    const cards=source.cards.splice(0),face=cards.shift(),p=positions(data,game);
     game.objects=game.objects.filter(o=>o!==source);
     if(game.setup.epic)[face.face,face.back]=[face.back,face.face];
     add(game,'Mastermind',[face],p.mastermind,true);
-    add(game,'Mastermind Tactics',shuffle(cards,random),{x:p.mastermind.x-5,z:p.mastermind.z});
+    add(game,'Mastermind Tactics',shuffle(cards,random),p.tactics||{x:p.mastermind.x-5,z:p.mastermind.z});
     game.setup.mastermind=m.key;game.setup.hiddenMastermind=false;
     return 'Mastermind revelado: '+m.name;
   }
-  return {prepare,positions,revealMastermind,count};
+  return {prepare,positions,revealMastermind,count,project};
 })();
 if(typeof module!=='undefined')module.exports=ModernLegendarySetup;

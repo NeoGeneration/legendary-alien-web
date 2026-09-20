@@ -30,6 +30,7 @@ const AlienBackup = (() => {
         if (object.type === 'playmat' && (!finite(object, ['width', 'height']) || object.width <= 0 || object.height <= 0)) invalid();
         if (object.type === 'board' && (!Number.isFinite(object.widthScale) || object.widthScale <= 0)) invalid();
         if (object.textureBounds && (!Array.isArray(object.textureBounds) || object.textureBounds.length !== 4 || !object.textureBounds.every(Number.isFinite))) invalid();
+        if (object.textureProjection && (!Array.isArray(object.textureProjection) || object.textureProjection.length !== 8 || !object.textureProjection.every(Number.isFinite))) invalid();
         if (['bag', 'token'].includes(object.type) && (!Array.isArray(object.color) || object.color.length < 3 || !object.color.every(Number.isFinite))) invalid();
         if (object.type === 'counter' && !Number.isFinite(object.value)) invalid();
         if (object.type === 'text' && (typeof object.text !== 'string' || !Number.isFinite(object.fontSize))) invalid();

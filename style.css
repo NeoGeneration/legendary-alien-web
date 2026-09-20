@@ -266,6 +266,17 @@ button:disabled { opacity: .5; cursor: wait; }
 .setup-note { margin: 0; font-size: 13px; color: #acb9b0; }
 #setup-error { color: #f4c8ab; }
 #setup-submit { width: 100%; margin-top: 10px; min-height: 48px; }
+.collection-filter { margin-block: 12px; padding: 10px 0; border-block: 1px solid var(--line); }
+.playmat-photo { position: absolute; inset: 0; width: 100%; height: 100%; transform-origin: 0 0; pointer-events: none; }
+.obj.playmat:has(.playmat-photo) { overflow: hidden; }
+#modern-group-options > label { display: block; margin-top: 14px; }
+.collection-filter summary { cursor: pointer; padding: 6px 0; }
+.collection-presets { display: flex; gap: 8px; margin-block: 10px; }
+.setup-choices { max-height: 230px; overflow-y: auto; overscroll-behavior: contain; }
+.setup-choices label.setup-check { display: flex; align-items: center; gap: 10px; min-height: 44px; margin: 0; padding: 4px 0; }
+.setup-choices input[type="checkbox"] { width: 20px; height: 20px; flex: 0 0 20px; }
+#marvel-hero-search { width: 100%; margin-top: 8px; }
+#marvel-hero-count { color: var(--accent); }
 @media (hover: none) { #preview { display: none !important; } }
 
 /* Shared game selector and X-Files controls. */
