@@ -382,6 +382,7 @@ async function load() {
   GameSetup.configure?.(data);
   if(GAME.id==='marvel')populateMarvelSetup();
   if(IS_MODERN)populateModernSetup();
+  if(GameSetup.encounters)populateEncountersSetup();
   if (IS_COLLECTION) {
     const links = $('#collection-rules'); links.innerHTML = '';
     for (const rule of GameSetup.rules) {
@@ -1850,6 +1851,7 @@ function updateTurnUI() {
     : 'Pulsa Preparar para elegir la partida y los jugadores.';
   for (const button of document.querySelectorAll('[data-xf-command]')) {
     if(button.dataset.xfCommand==='revealMastermind')button.hidden=!state?.setup?.hiddenMastermind;
+    if(button.dataset.xfCommand==='fireflyNextEpisode')button.hidden=GAME.id!=='firefly'||state?.setup?.encountersVersion!==1||state.setup.episodeIndex>=2;
     button.disabled = !state?.setup || Boolean(online?.active && !online.connected)
       || (IS_XFILES && button.dataset.xfCommand === 'endTurn' && state.setup.turn !== seat);
   }
@@ -2012,6 +2014,84 @@ function populateModernSetup() {
   const reveal=document.createElement('button');reveal.textContent='Revelar Mastermind';reveal.dataset.xfCommand='revealMastermind';
   reveal.onclick=()=>xfilesAction({command:'revealMastermind'});$('#turn-actions').appendChild(reveal);
 }
+let encountersAvatars=[],encountersStages=[],encountersHeroes=[];
+function populateEncountersSetup() {
+  const meta=GameSetup.encounters,select=$('#setup-scenario');
+  select.innerHTML='';
+  for(const s of meta.scenarios) {
+    const option=document.createElement('option');option.value=s.id;option.textContent=s.title;select.appendChild(option);
+  }
+  select.value=meta.defaultScenario;$('#encounters-options').hidden=false;
+  $('#predator-hero-mode').value='movie';$('#predator-hero-mode').onchange=updateSetupSummary;
+  configureEncountersOptions();
+  if(GAME.id==='firefly') {
+    const button=document.createElement('button');button.textContent='Preparar episodio siguiente';button.dataset.xfCommand='fireflyNextEpisode';
+    button.onclick=()=>xfilesAction({command:'fireflyNextEpisode'});$('#turn-actions').appendChild(button);
+  }
+}
+function configureEncountersOptions(saved) {
+  const meta=GameSetup.encounters,scenario=GameSetup.scenarios.find(s=>s.id===$('#setup-scenario').value);
+  if(!meta||!scenario)return;
+  const firefly=GAME.id==='firefly',hunters=scenario.mode==='hunters';
+  $('#encounters-stages').hidden=!scenario.custom;
+  $('#encounters-stages-title').textContent=firefly?'Episodios A, B y C':'Etapas 1, 2 y 3';
+  $('#encounters-avatar-title').textContent=firefly?'Cinco personajes principales':'Avatares de los jugadores';
+  $('#encounters-stage-fields').innerHTML='';encountersStages=[];
+  $('#encounters-avatar-fields').innerHTML='';encountersAvatars=[];
+  const field=(container,title,choices,value)=>{
+    const label=document.createElement('label'),select=document.createElement('select'),text=document.createTextNode(title);
+    for(const c of choices) {const o=document.createElement('option');o.value=c.key;o.textContent=c.name;select.appendChild(o);}
+    select.value=value;select.onchange=updateSetupSummary;label.appendChild(text);label.appendChild(select);$(container).appendChild(label);
+    return {label,select,text};
+  };
+  for(let i=0;i<3;i++) {
+    const choices=firefly?meta.episodes.filter(e=>e.stage==='ABC'[i]).map(e=>({key:e.id,name:e.name})):
+      meta.stages.filter(s=>s.mode===scenario.mode&&s.stage===i+1);
+    const selected=firefly?(saved?.episodes||scenario.episodes)[i]:(saved?.stages?.[i]||choices.find(s=>s.movie===scenario.movie).key);
+    encountersStages.push(field('#encounters-stage-fields',firefly?'Episodio '+'ABC'[i]:'Etapa '+(i+1),choices,selected).select);
+  }
+  const choices=meta.avatars.filter(a=>firefly||a.mode===scenario.mode);
+  const numbers=hunters?[1,2,3,4,5]:scenario.movie===2?[6,7,9,8,10]:[1,2,5,4,3];
+  const defaults=firefly?scenario.avatars:numbers.map(n=>'avatar'+n+(hunters?'predatorvpredator':'predator'));
+  for(let i=0;i<5;i++)encountersAvatars.push(field('#encounters-avatar-fields','Jugador '+(i+1),choices,saved?.avatars?.[i]||defaults[i]));
+  $('#predator-location-label').hidden=firefly||hunters;
+  $('#predator-location').value=saved?.location||'locationpredator'+(scenario.movie||1);
+  $('#predator-heroes').hidden=firefly;$('#predator-hunter-options').hidden=!hunters;
+  $('#predator-hero-list').innerHTML='';encountersHeroes=[];
+  if(!firefly) {
+    $('#predator-hero-mode').value=saved?.heroMode||'movie';
+    for(const h of meta.heroes.filter(h=>h.mode===scenario.mode)) {
+      const label=document.createElement('label'),input=document.createElement('input');
+      label.className='setup-check';input.type='checkbox';input.value=h.key;
+      input.checked=saved?.heroKeys?saved.heroKeys.includes(h.key):h.movie===scenario.movie;input.onchange=updateSetupSummary;
+      label.appendChild(input);label.appendChild(document.createTextNode(h.name));$('#predator-hero-list').appendChild(label);encountersHeroes.push(input);
+    }
+    for(const option of ['tests','challenges','cooperative'])$('#predator-'+option).checked=Boolean(saved?.[option]);
+  }
+}
+function encountersOptions(players) {
+  const options={avatars:encountersAvatars.slice(0,GAME.id==='firefly'?5:players).map(a=>a.select.value)};
+  if(GAME.id==='firefly')options.episodes=encountersStages.map(s=>s.value);
+  else {
+    Object.assign(options,{stages:encountersStages.map(s=>s.value),location:$('#predator-location').value,randomHeroes:$('#predator-hero-mode').value==='random'});
+    if($('#predator-hero-mode').value==='manual')options.heroKeys=encountersHeroes.filter(i=>i.checked).map(i=>i.value);
+    for(const option of ['tests','challenges','cooperative'])options[option]=Boolean($('#predator-'+option).checked);
+  }
+  return options;
+}
+function updateEncountersSummary(players) {
+  const firefly=GAME.id==='firefly',options=encountersOptions(players),distinct=new Set(options.avatars).size===options.avatars.length;
+  encountersAvatars.forEach((a,i)=>{a.label.hidden=!firefly&&i>=players;a.text.textContent=i<players?'Jugador '+(i+1):'Principal sin jugador '+(i-players+1);});
+  const manual=!firefly&&$('#predator-hero-mode').value==='manual';
+  $('#predator-hero-picker').hidden=!manual;
+  $('#predator-hero-count').textContent=encountersHeroes.filter(i=>i.checked).length+' de 4 seleccionados';
+  $('#setup-submit').disabled=!distinct||(manual&&options.heroKeys.length!==4);
+  $('#encounters-support').textContent=firefly?'Tripulación de apoyo: '+GameSetup.encounters.avatars.filter(a=>!options.avatars.includes(a.key)).map(a=>a.name).join(', ')+'.':(distinct?'':'Elige un avatar diferente para cada jugador.');
+  const rounds=firefly?Math.max(0,players-3):players===5?1:0;
+  $('#setup-summary').textContent=(firefly?`Cinco personajes principales y cuatro de apoyo · Crew: 56 cartas · ${players-1} Side Jobs por episodio · Un Inevitable al fondo de cada mazo.`:
+    `Cuatro grupos de personajes / Armory · HQ: 5 cartas · Cartas adicionales por etapa: ${EncountersSetup.extrasByPlayers[players-1].join(', ')}.`)+
+    ' Mazo inicial: 13 cartas; mano: 6. '+(rounds?rounds+' ronda(s) de preparación inicial sin revelar enemigos. ':'')+'Las cartas restantes quedan alrededor del tapete.';
+}
 if(IS_COLLECTION && GameSetup.avatars.length) {
   $('#collection-avatars').hidden=false;
   const defaults=['Neo1','Morpheus1','Trinity1','Switch','Mouse'];
@@ -2038,6 +2118,7 @@ function updateSetupSummary() {
       $('#setup-scenario').value=scenario.id;
     }
     document.querySelectorAll('[data-collection-seat]').forEach(label=>{label.hidden=Number(label.dataset.collectionSeat)>players;});
+    if(GameSetup.encounters) {updateEncountersSummary(players);return;}
     if(IS_MODERN) {
       const hidden=scenario.special==='bodyguards';
       $('#marvel-mastermind').disabled=hidden;
@@ -2146,7 +2227,8 @@ $('#btn-setup').onclick = () => {
         }
       }
     }
-    if(IS_COLLECTION && state.setup.avatars)state.setup.avatars.forEach((avatar,i)=>{$('#collection-avatar-'+(i+1)).value=avatar;});
+    if(GameSetup.encounters)configureEncountersOptions(state.setup);
+    if(IS_COLLECTION && GameSetup.avatars.length && state.setup.avatars)state.setup.avatars.forEach((avatar,i)=>{$('#collection-avatar-'+(i+1)).value=avatar;});
     if (IS_XFILES) {
       document.querySelectorAll('#xf-heroes input').forEach(input => { input.checked = state.setup.heroes.includes(Number(input.value)); });
       state.setup.avatars.forEach((avatar, i) => { $(`#xf-avatar-${i+1}`).value=avatar; });
@@ -2170,6 +2252,7 @@ $('#setup-close').onclick = () => { $('#setup').hidden = true; };
 $('#setup-players').onchange = updateSetupSummary;
 for(const selector of ['#marvel-mastermind','#marvel-epic','#marvel-supplies','#marvel-solo'])$(selector).onchange=updateSetupSummary;
 $('#setup-scenario').onchange = () => {
+  if(GameSetup.encounters)configureEncountersOptions();
   if(IS_COLLECTION && GAME.id==='matrix') {
     const movie=GameSetup.scenarios.find(s=>s.id===$('#setup-scenario').value)?.movie||1;
     const defaults=movie===1?['Neo1','Morpheus1','Trinity1','Switch','Mouse']:['Neo'+movie,'Morpheus2','Trinity2','Niobe','Roland'];
@@ -2180,6 +2263,7 @@ $('#setup-scenario').onchange = () => {
 $('#setup-form').onsubmit = async e => {
   e.preventDefault();
   const options = { scenario: $('#setup-scenario').value, players: Number($('#setup-players').value), expansionDrones: $('#setup-drones').checked };
+  if(GameSetup.encounters)Object.assign(options,encountersOptions(options.players));
   if(GAME.id==='marvel')Object.assign(options,{mastermind:$('#marvel-mastermind').value,collection:'all',
     epic:Boolean($('#marvel-epic').checked),supplies:$('#marvel-supplies').value||'expanded',soloMode:$('#marvel-solo').value||'classic'});
   if(GAME.id==='marvel'&&marvelCollectionInputs.length)Object.assign(options,{collections:selectedMarvelCollections(),

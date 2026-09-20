@@ -44,6 +44,7 @@ const LegendarySetup = (() => {
       if(id==='marvel'&&data.marvelSetups)for(const recipe of data.marvelSetups.schemes)
         if(!scenarios.some(s=>s.id===recipe.id))scenarios.push(recipe);
       if(data.modernSetups)scenarios.splice(0,scenarios.length,...data.modernSetups.schemes);
+      if(data.encountersSetups)scenarios.splice(0,scenarios.length,...data.encountersSetups.scenarios);
     };
     const catalog = () => data.objects.filter(o=>o.type==='stack');
     const seatZone = (game,seat,zone) => game.objects.find(o=>o.type==='player-zone'&&o.playerId===seat&&o.zone===zone);
@@ -95,6 +96,10 @@ const LegendarySetup = (() => {
       if(players<(scenario.minPlayers||1))throw new Error('Este escenario necesita al menos '+scenario.minPlayers+' jugadores.');
       const game=newGame(players);
       game.setup={scenario:scenario.id,title:scenario.title,players,turn:1};
+      if(data.encountersSetups) {
+        const preparer=typeof module!=='undefined'?require('./encounters/setup.js'):EncountersSetup;
+        return preparer.prepare({data,game,scenario,players,options,random,add,seatZone,shuffle});
+      }
       if(data.modernSetups) {
         const preparer=typeof module!=='undefined'?require('./modern/setup.js'):ModernLegendarySetup;
         return preparer.prepare({data,game,scenario,players,options,random,add,seatZone,shuffle});
@@ -342,6 +347,10 @@ const LegendarySetup = (() => {
       return game;
     }
     function firstTurn(selected,seats=selected.map((_,i)=>i+1)) {
+      if(data.encountersSetups) {
+        const rank=seat=>data.encountersSetups.avatars.find(a=>a.key===selected[seat-1])?.rank||0;
+        return seats.reduce((first,seat)=>rank(seat)<rank(first)?seat:first,seats[0]);
+      }
       return seats.reduce((first,seat)=>avatars.findIndex(a=>a.id===selected[seat-1])<avatars.findIndex(a=>a.id===selected[first-1])?seat:first,seats[0]);
     }
     function addRealWorldLabel(game) {
@@ -351,6 +360,10 @@ const LegendarySetup = (() => {
       if (action.command==='library') { bring(game,action.key); return 'Mazo añadido a la reserva'; }
       if (action.command==='reserves') return addMarvelReserves(game)+' mazos añadidos alrededor del tapete';
       if (!game.setup || seat<1||seat>game.setup.players) throw new Error('Prepara la mesa para tu jugador.');
+      if(action.command==='fireflyNextEpisode'&&id==='firefly') {
+        const preparer=typeof module!=='undefined'?require('./encounters/setup.js'):EncountersSetup;
+        return preparer.nextEpisode({data,game,add,random,shuffle});
+      }
       if(action.command==='revealMastermind'&&data.modernSetups) {
         const preparer=typeof module!=='undefined'?require('./modern/setup.js'):ModernLegendarySetup;
         return preparer.revealMastermind({data,game,random,add,shuffle});
@@ -382,7 +395,7 @@ const LegendarySetup = (() => {
       throw new Error('Acción no válida.');
     }
     const engine={configure,scenarios,avatars,catalog,newGame,create,act,draw,bring,seatZone,inPlayArea,firstTurn,
-      get rules(){return data?.rules||[];},get marvel(){return data?.marvelSetups;},get modern(){return data?.modernSetups;}};
+      get rules(){return data?.rules||[];},get marvel(){return data?.marvelSetups;},get modern(){return data?.modernSetups;},get encounters(){return data?.encountersSetups;}};
     engines.set(id,engine);return engine;
   }
   return {titles,forGame};

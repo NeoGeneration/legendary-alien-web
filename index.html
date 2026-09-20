@@ -138,6 +138,20 @@
         <fieldset><legend>Academia · Elige 4 personajes</legend><div id="xf-heroes"></div><button id="xf-random-heroes" type="button">Elegir cuatro al azar</button></fieldset>
         <fieldset><legend>Agentes de los jugadores</legend><div id="xf-avatars"></div></fieldset>
       </div>
+      <div id="encounters-options" hidden>
+        <fieldset id="encounters-stages" hidden><legend id="encounters-stages-title">Etapas</legend><div id="encounters-stage-fields"></div></fieldset>
+        <label id="predator-location-label" hidden>Localización<select id="predator-location"><option value="locationpredator1">Predator · Jungle</option><option value="locationpredator2">Predator 2 · Los Angeles</option></select></label>
+        <fieldset><legend id="encounters-avatar-title">Personajes</legend><div id="encounters-avatar-fields"></div><p id="encounters-support" class="setup-note"></p></fieldset>
+        <div id="predator-heroes" hidden>
+          <label>Personajes / Armory<select id="predator-hero-mode"><option value="movie">Los cuatro de la película</option><option value="random">Cuatro al azar</option><option value="manual">Elegir cuatro</option></select></label>
+          <div id="predator-hero-picker" hidden><p id="predator-hero-count" role="status"></p><div id="predator-hero-list" class="setup-choices"></div></div>
+        </div>
+        <fieldset id="predator-hunter-options" hidden><legend>Variantes de los cazadores</legend>
+          <label class="setup-check"><input id="predator-tests" type="checkbox"> Tests · 10 pruebas en Armory</label>
+          <label class="setup-check"><input id="predator-challenges" type="checkbox"> Challenges · Un reto secreto por jugador</label>
+          <label class="setup-check"><input id="predator-cooperative" type="checkbox"> Cooperativo · Retirar las cuatro trampas de duelo</label>
+        </fieldset>
+      </div>
       <p id="setup-summary"></p>
       <p id="setup-description" class="setup-note">Prepara localización, objetivos, cuartel, 5 cartas en HQ y colmena. Después elige avatar y roba tu mano inicial.</p>
       <p class="setup-note">Sustituye la mesa actual. Puedes recuperarla con Deshacer.</p>
@@ -173,7 +187,8 @@
     <section id="collection-help" hidden>
       <h2>Tu colección Legendary</h2>
       <p>Reserva contiene los mazos y expansiones. Busca por nombre y pulsa Añadir para traer un mazo a la mesa. Cada mazo se añade una vez; puedes deshacerlo.</p>
-      <p>Matrix y James Bond preparan automáticamente la película y los mazos. Marvel original incluye 175 Schemes del mod. Marvel Segunda Edición tiene sus propias cartas y preparación automática. Predator y Firefly se preparan desde Reserva siguiendo el reglamento. Turno permite robar, jugar la mano y descartarla al terminar.</p>
+      <p>Matrix y James Bond preparan automáticamente la película y los mazos. Marvel original incluye 175 Schemes del mod. Marvel Segunda Edición tiene sus propias cartas y preparación automática. Predator prepara humanos o cazadores; Firefly permite elegir los episodios y los cinco personajes principales. Las cartas restantes quedan alrededor del tapete. Turno permite robar, jugar la mano y descartarla al terminar.</p>
+      <p>Firefly: al acabar un episodio, resuelve el intermedio y sus gastos antes de pulsar «Preparar episodio siguiente» en Turno. Se limpia el episodio anterior y se colocan las cartas iniciales del siguiente; las manos se conservan.</p>
       <div id="collection-rules"></div>
     </section>
     <section id="backup-tools" aria-labelledby="backup-title">
@@ -237,8 +252,8 @@
       <a data-game="bond" href="?game=bond"><strong>JAMES BOND</strong><span>Nueve películas · Preparación automática</span></a>
       <a data-game="marvel" href="?game=marvel"><strong>MARVEL LEGENDARY</strong><span>175 Schemes · Colección del mod</span></a>
       <a data-game="marvel2" href="?game=marvel2"><strong>MARVEL · SEGUNDA EDICIÓN</strong><span>550 cartas · Preparación automática</span></a>
-      <a data-game="predator" href="?game=predator"><strong>PREDATOR</strong><span>Humanos y cazadores · Mesa manual</span></a>
-      <a data-game="firefly" href="?game=firefly"><strong>FIREFLY</strong><span>Tripulación, episodios y Serenity · Mesa manual</span></a>
+      <a data-game="predator" href="?game=predator"><strong>PREDATOR</strong><span>Humanos y cazadores · Preparación automática</span></a>
+      <a data-game="firefly" href="?game=firefly"><strong>FIREFLY</strong><span>Tripulación y episodios · Preparación automática</span></a>
     </div>
   </div>
 </div>
@@ -272,12 +287,13 @@
 <script src="xfiles/setup.js?v=5"></script>
 <script src="games/marvel/setup.js?v=2"></script>
 <script src="games/modern/setup.js?v=2"></script>
-<script src="games/setup.js?v=6"></script>
-<script src="game-config.js?v=7"></script>
+<script src="games/encounters/setup.js?v=1"></script>
+<script src="games/setup.js?v=7"></script>
+<script src="game-config.js?v=8"></script>
 <script src="multiplayer-config.js?v=1"></script>
 <script src="access.js?v=1"></script>
 <script src="multiplayer.js?v=9"></script>
 <script src="backup.js?v=5"></script>
-<script src="app.js?v=35"></script>
+<script src="app.js?v=36"></script>
 </body>
 </html>
