@@ -584,10 +584,10 @@ function renderObj(o) {
     }
     if(o.type==='playmat'&&o.textureProjection) {
       // Display the user's unchanged photograph flat; all pixels stay in the original asset.
-      const [a,b,c,d,e,f,g,h]=o.textureProjection,W=w*UNIT,H=h*UNIT;
+      const [a,b,c,d,e,f,g,perspectiveY]=o.textureProjection,W=w*UNIT,H=h*UNIT;
       const photo=document.createElement('img');photo.src=img;photo.alt='Tapete de '+GAME.title;
       photo.className='playmat-photo';photo.draggable=false;
-      photo.style.transform=`matrix3d(${[a,d*H/W,0,g/W,b*W/H,e,0,h/H,0,0,1,0,c*W,f*H,0,1].join(',')})`;
+      photo.style.transform=`matrix3d(${[a,d*H/W,0,g/W,b*W/H,e,0,perspectiveY/H,0,0,1,0,c*W,f*H,0,1].join(',')})`;
       el.style.backgroundImage='';el.appendChild(photo);
     }
   } else if (o.type === 'text') {
