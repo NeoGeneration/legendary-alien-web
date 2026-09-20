@@ -18,7 +18,14 @@ const PRE_IMPORT_KEY = GAME.previousKey;
 // coordinates still use the same card-sized drop areas.
 const PLAYER_ZONE_ART = {
   draw: 'cards/230_12.jpg', discard: 'cards/231_7.jpg',
-  avatar: 'cards/229_2.jpg', strikes: 'cards/232_2.jpg',
+  avatar: 'cards/229_2.jpg', victory: 'cards/229_2.jpg', strikes: 'cards/232_2.jpg',
+};
+// Encounters games keep a persistent Avatar. Bond, Marvel and DC score in a
+// Victory Pile instead. Keep the stored zone key so old saves and room positions
+// remain compatible with their existing cards and turn actions.
+const PERSONAL_PLAYER_ZONE = {
+  alien:'avatar',xfiles:'avatar',matrix:'avatar',predator:'avatar',firefly:'avatar',
+  bond:'victory',marvel:'victory',marvel2:'victory',dc:'victory',
 };
 
 const $ = s => document.querySelector(s);
@@ -672,7 +679,7 @@ function renderObj(o) {
     el.style.transform = `rotate(${o.rot - 180}deg)`;
     if (o.type === 'player-zone') {
       // Reuse the same drop area in existing saves without moving its cards.
-      const victory = ['marvel', 'marvel2'].includes(GAME.id) && o.zone === 'avatar';
+      const victory = PERSONAL_PLAYER_ZONE[GAME.id] === 'victory' && o.zone === 'avatar';
       const zone = victory ? 'victory' : o.zone;
       const name = victory ? 'Victory Pile' : o.name;
       if (o.labelOnly) el.dataset.zone = zone;
@@ -682,6 +689,11 @@ function renderObj(o) {
         art.className = 'player-zone-art';
         art.style.backgroundImage = `url("${zoneArt}")`;
         art.setAttribute('aria-hidden', 'true');
+        if(victory) {
+          art.classList.add('victory-zone-art');
+          const caption=document.createElement('span');caption.className='player-zone-caption';caption.textContent=name;
+          art.appendChild(caption);
+        }
         el.appendChild(art);
       } else if (o.labelOnly) {
         el.classList.add('labeled-zone');
@@ -689,7 +701,7 @@ function renderObj(o) {
       }
       el.setAttribute('role', 'img');
       el.setAttribute('aria-label', `Zona de jugador: ${name}`);
-      el.title = victory ? 'Pila de victoria · Villanos derrotados y Bystanders rescatados' : `${name} · Coloca tus cartas aquí`;
+      el.title = victory ? 'Pila de victoria · Cartas que otorgan puntos de victoria' : `${name} · Coloca tus cartas aquí`;
     }
     if (o.textureBounds) {
       const [x1, y1, x2, y2] = o.textureBounds;

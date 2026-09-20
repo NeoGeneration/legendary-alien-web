@@ -75,7 +75,13 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--accent
 .player-zone-art { position: absolute; inset: -21%; pointer-events: none;
   background-size: 107% 105%; background-position: center; border-radius: 5% / 3.5%; box-shadow: 0 2px 5px #0008; }
 .labeled-zone { border: 2px solid #637582; background: #18263088; display: flex; align-items: center; justify-content: center; color: #b8cbd8; font-size: 13px; text-align: center; }
-.labeled-zone[data-zone="victory"] { border-color: #b79b57; color: #ead59b; background: #312a1988; font-weight: 650; }
+/* Reuse the illustrated base, including its Legendary emblem and card outline.
+   This caption covers the printed Avatar label without changing the artwork. */
+.victory-zone-art { overflow:hidden; }
+.player-zone-caption { position:absolute; left:22%; right:22%; bottom:0; height:12%;
+  display:flex; align-items:center; justify-content:center; padding-bottom:2%;
+  border-radius:42% 42% 0 0 / 85% 85% 0 0; background:#4e7e31; color:#fff;
+  font-size:8.5px; line-height:1; font-weight:600; letter-spacing:.01em; white-space:nowrap; }
 /* Keep the play area in game state for turn actions, without drawing a box. */
 .labeled-zone[data-zone="play"] { display: none; }
 .playmat { border-radius: 1.8% / 4.2%; overflow: hidden; box-shadow: 0 8px 28px #0008; }
