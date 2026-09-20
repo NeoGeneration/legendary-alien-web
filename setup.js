@@ -27,6 +27,96 @@ const AlienSetup = (() => {
       crewLabel: 'Daniels, Walter, Karine y Oram' }
   ];
   const dronesByPlayers = [[0, 0, 0], [0, 1, 2], [2, 3, 4], [4, 5, 6], [4, 5, 6]];
+  const seats=[
+    {draw:'0789ec',discard:'23d999',starter:'c42645',counter:'457f60',bounds:[-12,12,-30,-13]},
+    {draw:'74fa8f',discard:'4cd4b1',starter:'2ab6c4',counter:'779c2a',bounds:[-43,-18,-31,-13]},
+    {draw:'180f3b',discard:'b9bc82',starter:'a52092',counter:'5cb26a',bounds:[18,43,-31,-13]},
+    {draw:'e22c84',discard:'92bd05',starter:'ec2dd3',counter:'340cec',bounds:[30,45,-12,18]},
+    {draw:'181e72',discard:'fa5702',starter:'11f85b',counter:'de5319',bounds:[-47,-33,-12,23]},
+  ];
+  const seatZone=(game,seat,zone)=>game.objects.find(o=>o.type==='player-zone'&&o.sourceId===seats[seat-1]?.[zone]);
+  function onZone(o,zone) {
+    const a=(zone.rot-180)*Math.PI/180,dx=o.x-zone.x,dy=zone.z-o.z;
+    return Math.abs(dx*Math.cos(a)+dy*Math.sin(a))<=2.25*zone.scale/2
+      && Math.abs(-dx*Math.sin(a)+dy*Math.cos(a))<=3.15*zone.scale/2;
+  }
+  const stacksAt=(game,zone)=>game.objects.filter(o=>o.type==='stack'&&onZone(o,zone)).sort((a,b)=>(b.z_||0)-(a.z_||0));
+  const prune=game=>{game.objects=game.objects.filter(o=>o.type!=='stack'||o.cards.length);};
+  function drawPiles(game,seat) {
+    const drawZone=seatZone(game,seat,'draw'),discard=seatZone(game,seat,'discard');
+    const piles=stacksAt(game,drawZone);
+    // The TTS starter decks initially sit beside their Draw markers.
+    if(!piles.length) {
+      const starter=game.objects.find(o=>o.type==='stack'&&o.sourceId===seats[seat-1].starter&&o.cards.length&&!onZone(o,discard));
+      if(starter)piles.push(starter);
+    }
+    return piles;
+  }
+  function addPlayerStack(game,cards,p,faceUp,name='Carta en juego') {
+    if(!cards.length)return;
+    const stack={type:'stack',id:game.nextId++,name,cards,x:p.x,z:p.z,rot:p.rot??180,scale:1.47,faceUp,
+      z_:Math.max(0,...game.objects.map(o=>o.z_||0))+1};
+    game.objects.push(stack);return stack;
+  }
+  function draw(game,hand,seat,count,random=Math.random) {
+    const drawZone=seatZone(game,seat,'draw'),discard=seatZone(game,seat,'discard');
+    if(!drawZone||!discard)throw new Error('No hay mazo y descarte para tu jugador.');
+    let drawn=0;
+    while(drawn<count) {
+      let piles=drawPiles(game,seat);
+      if(!piles.length) {
+        const cards=stacksAt(game,discard).flatMap(o=>o.cards.splice(0));prune(game);
+        if(!cards.length)break;
+        for(let i=cards.length-1;i>0;i--){const j=Math.floor(random()*(i+1));[cards[i],cards[j]]=[cards[j],cards[i]];}
+        piles=[addPlayerStack(game,cards,drawZone,false,'Mazo de jugador '+seat)];
+      }
+      hand.push(piles[0].cards.shift());drawn++;prune(game);
+    }
+    return drawn;
+  }
+  function inPlayArea(o,game,seat) {
+    const [left,right,bottom,top]=seats[seat-1].bounds;
+    if(o.type!=='stack'||o.x<=left||o.x>=right||o.z<=bottom||o.z>=top)return false;
+    if(o.sourceId===seats[seat-1].starter)return false;
+    if(game.objects.some(zone=>zone.type==='player-zone'&&onZone(o,zone)))return false;
+    return !drawPiles(game,seat).includes(o);
+  }
+  function act(game,hand,seat,action,random=Math.random) {
+    if(game.gameId&&game.gameId!=='alien')throw new Error('Esta acción pertenece a Alien.');
+    if(!game.setup||!Number.isInteger(seat)||seat<1||seat>game.setup.players)throw new Error('Prepara la mesa para tu jugador.');
+    const drawZone=seatZone(game,seat,'draw'),discard=seatZone(game,seat,'discard');
+    if(!drawZone||!discard)throw new Error('No hay mazo y descarte para tu jugador.');
+    if(action.command==='draw') {
+      if(![1,6].includes(action.count))throw new Error('Puedes robar una o seis cartas.');
+      return 'Robadas '+draw(game,hand,seat,action.count,random);
+    }
+    if(action.command==='playHand') {
+      const [left,right,bottom,top]=seats[seat-1].bounds,side=seat>=4;
+      const stepX=side?5:3.7,stepZ=side?3.7:5;
+      const positions=[];
+      for(let z=top-stepZ/2;z>bottom+stepZ/2;z-=stepZ)for(let x=left+stepX/2;x<right-stepX/2;x+=stepX) {
+        const p={type:'stack',x,z,rot:drawZone.rot};
+        if(!inPlayArea(p,game,seat))continue;
+        if(game.objects.some(o=>['stack','counter'].includes(o.type)&&Math.abs(o.x-x)<stepX*.8&&Math.abs(o.z-z)<stepZ*.8))continue;
+        positions.push(p);
+      }
+      if(positions.length<hand.length)throw new Error('Deja espacio en tu zona de juego para colocar la mano.');
+      hand.splice(0).forEach((card,i)=>addPlayerStack(game,[card],positions[i],true));
+      return 'Mano jugada';
+    }
+    if(action.command==='endTurn') {
+      const played=game.objects.filter(o=>inPlayArea(o,game,seat));
+      const cards=[...hand.splice(0),...played.flatMap(o=>o.cards.splice(0))];prune(game);
+      const existing=stacksAt(game,discard).find(o=>o.faceUp);
+      if(existing)existing.cards.unshift(...cards);
+      else addPlayerStack(game,cards,discard,true,'Descarte de jugador '+seat);
+      const n=draw(game,hand,seat,6,random);
+      for(const o of game.objects)if(o.type==='counter'&&o.playerId===seats[seat-1].counter&&['combat','stars'].includes(o.resource))o.value=0;
+      game.setup.turn=seat%game.setup.players+1;
+      return 'Turno terminado · Robadas '+n;
+    }
+    throw new Error('Acción no válida.');
+  }
   function create(initial, options, random = Math.random) {
     const scenario = scenarios.find(s => s.id === options.scenario);
     const players = Number(options.players);
@@ -89,6 +179,6 @@ const AlienSetup = (() => {
       setup: { scenario: scenario.id, title: scenario.title, players, expansionDrones: Boolean(options.expansionDrones), hiveLayers: layers.map(a => a.length) }
     };
   }
-  return { scenarios, dronesByPlayers, create };
+  return { scenarios, dronesByPlayers, create,seatZone,draw,act,inPlayArea };
 })();
 if (typeof module !== 'undefined') module.exports = AlienSetup;

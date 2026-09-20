@@ -9,13 +9,17 @@ document.documentElement.dataset.game = window.AlienGame.id;
 document.title = `Legendary Encounters: ${window.AlienGame.title} — Mesa`;
 document.querySelector('#game-name').textContent = window.AlienGame.title;
 document.querySelector('#access-form h1').textContent = window.AlienGame.title;
+document.querySelector('#btn-turn').hidden = false;
+if(window.AlienGame.id==='alien') {
+  for(const button of document.querySelectorAll('[data-xf-command="gain"], [data-xf-command="conspiracy"]'))button.hidden=true;
+  document.querySelector('#turn-note').textContent='Terminar turno descarta tu mano y las cartas de tu zona de juego, roba seis y reinicia Combate y Estrellas. Si se agota tu mazo, baraja el descarte. Los efectos y el avance de la Colmena se resuelven manualmente.';
+}
 if (window.AlienGame.id === 'xfiles') {
   document.querySelector('[data-zone="complex"]').textContent = 'Sombras';
   document.querySelector('[data-zone="hq"]').textContent = 'Bureau';
   document.querySelector('#setup-drones-label').hidden = true;
   document.querySelector('#setup-players').value = '1';
   document.querySelector('#xfiles-setup').hidden = false;
-  document.querySelector('#btn-turn').hidden = false;
   document.querySelector('#setup-description').textContent = 'Prepara evidencias, Academia, Bureau boca abajo, conspiración por etapas y agentes. Reparte seis cartas a cada jugador conectado.';
   document.querySelector('#xfiles-help').hidden = false;
 }
@@ -25,7 +29,6 @@ if (window.AlienGame.collection) {
   document.querySelector('[data-zone="hq"]').textContent = {matrix:'Dock',bond:'Q Branch',marvel:'HQ',marvel2:'HQ',dc:'HQ',predator:'HQ',firefly:'Bridge'}[game];
   document.querySelector('#setup-drones-label').hidden = true;
   document.querySelector('#setup-players').value = '1';
-  document.querySelector('#btn-turn').hidden = false;
   document.querySelector('#collection-help').hidden = false;
   document.querySelector('#setup-description').textContent = game === 'matrix'
     ? 'Prepara la película, los tres actos, Zion, Dock y los personajes. Reparte seis cartas a cada jugador conectado.'

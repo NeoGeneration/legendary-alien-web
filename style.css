@@ -7,13 +7,13 @@
   --text: #e1e9e4;
   --header-h: calc(62px + env(safe-area-inset-top));
   --zones-h: 48px;
-  --hand-h: calc(180px + env(safe-area-inset-bottom));
+  --hand-h: calc(188px + env(safe-area-inset-bottom));
 }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
 html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: var(--bg); color: var(--text);
   font: 14px/1.4 system-ui, sans-serif; user-select: none; -webkit-user-select: none; overscroll-behavior: none; }
-body:has(#hand.collapsed) { --hand-h: calc(44px + env(safe-area-inset-bottom)); }
+body:has(#hand.collapsed) { --hand-h: calc(52px + env(safe-area-inset-bottom)); }
 body.access-locked > :not(#app-access) { display: none !important; }
 #app-access { height: 100dvh; overflow-y: auto; display: grid; place-items: center; padding: 28px 24px;
   background: radial-gradient(ellipse at 50% 15%, #263b2480, transparent 65%), var(--bg); }
@@ -106,10 +106,12 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--accent
 .counter button { padding: 0 5px; min-height: 30px; line-height: 1; }
 #hand { position: fixed; left: 0; right: 0; bottom: 0; height: var(--hand-h); background: var(--surface);
   border-top: 1px solid var(--line); display: flex; flex-direction: column; z-index: 9; padding-bottom: env(safe-area-inset-bottom); }
-#hand-header { display: flex; align-items: center; flex-shrink: 0; gap: 8px; padding-right: max(12px, env(safe-area-inset-right)); }
+#hand-header { display: flex; align-items: center; flex-shrink: 0; gap: 10px; padding: 3px max(18px, env(safe-area-inset-right)) 5px max(16px, env(safe-area-inset-left)); }
 #hand-toggle { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex: 1; min-width: 0; height: 44px;
-  background: transparent; border: 0; border-radius: 0; padding: 0 8px 0 max(16px, env(safe-area-inset-left)); text-align: left; white-space: nowrap; }
-#hand-header #btn-turn { flex-shrink: 0; min-height: 44px; padding: 0 14px; }
+  background: transparent; border: 0; border-radius: 0; padding: 0 8px 0 0; text-align: left; white-space: nowrap; }
+#hand-header #btn-turn { position: relative; isolation: isolate; flex-shrink: 0; min-height: 44px; padding: 0 13px; border: 0; background: transparent; font-size: 12px; font-weight: 500; }
+#hand-header #btn-turn::before { content: ''; position: absolute; inset: 7px 0; z-index: -1; border: 1px solid var(--line); border-radius: 6px; background: #1b2520; }
+#hand-header #btn-turn:active::before { background: #35472c; }
 #hand-count { display: inline-block; margin-left: 7px; color: var(--accent); font-variant-numeric: tabular-nums; }
 #hand-toggle-label { color: #a6b6aa; font-size: 12px; }
 #hand-cards { flex: 1; min-height: 0; display: flex; gap: 8px; padding: 0 14px 10px; overflow-x: auto; align-items: center;
@@ -199,7 +201,7 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--accent
 #drag-ghost { position: fixed; pointer-events: none; z-index: 50; height: 130px; opacity: .85; border-radius: 6px; }
 @keyframes panel-in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
 @media (max-width: 700px) {
-  :root { --hand-h: calc(154px + env(safe-area-inset-bottom)); }
+  :root { --hand-h: calc(162px + env(safe-area-inset-bottom)); }
   #toolbar { padding-left: max(12px, env(safe-area-inset-left)); padding-right: max(12px, env(safe-area-inset-right)); }
   #toolbar button { padding-inline: 11px; }
   #zones { gap: 0; }
@@ -211,7 +213,7 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--accent
   #inspector-actions button { min-height: 48px; }
 }
 @media (orientation: landscape) and (max-height: 550px) {
-  :root { --header-h: calc(48px + env(safe-area-inset-top)); --zones-h: 44px; --hand-h: calc(100px + env(safe-area-inset-bottom)); }
+  :root { --header-h: calc(48px + env(safe-area-inset-top)); --zones-h: 44px; --hand-h: calc(108px + env(safe-area-inset-bottom)); }
   #toolbar strong { font-size: 21px; }
   #toolbar strong span { font-size: 7px; margin-bottom: 3px; }
   #zones button { min-height: 44px; }

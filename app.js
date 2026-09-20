@@ -1937,10 +1937,9 @@ $('#enemies-close').onclick=()=>{$('#enemies-dialog').hidden=true;$('#btn-enemie
 function updateTurnUI() {
   updateHandActions();
   updateEnemiesSummary();
-  if (!IS_COMPACT) return;
   const seat = online?.room?.seat || 1;
   $('#turn-summary').textContent = state?.setup
-    ? `Turno del jugador ${state.setup.turn} · Tu zona: jugador ${seat} · ${state.hand.length} cartas en tu mano`
+    ? `Turno del jugador ${state.setup.turn||1} · Tu zona: jugador ${seat} · ${state.hand.length} cartas en tu mano`
     : 'Pulsa Preparar para elegir la partida y los jugadores.';
   for (const button of document.querySelectorAll('[data-xf-command]')) {
     if(button.dataset.xfCommand==='revealMastermind')button.hidden=!state?.setup?.hiddenMastermind;
@@ -1960,7 +1959,7 @@ async function xfilesAction(action) {
   try {
     let message;
     if (online?.active) {
-      const response = await online.action({ type: IS_COLLECTION?'legendary':'xfiles', ...action }); message = response.message || 'Acción completada';
+      const response = await online.action({ type: IS_COLLECTION?'legendary':IS_XFILES?'xfiles':'alien', ...action }); message = response.message || 'Acción completada';
     } else {
       const next = clone(state);
       message = GameSetup.act(next, next.hand, 1, action);
