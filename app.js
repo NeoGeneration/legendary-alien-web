@@ -751,6 +751,13 @@ function renderObj(o) {
     plus.onclick = () => changeCounter(o, 1);
     row.append(minus, val, plus);
     el.append(label, row);
+    if (GAME.id === 'dc' && o.resource === 'hope') {
+      const cost = document.createElement('small'); cost.className = 'counter-cost';
+      cost.setAttribute('aria-label', 'Coste: 3 de Combate, una vez por turno');
+      cost.append(document.createTextNode('3'), counterIcon('combat'), document.createTextNode('· 1/turno'));
+      el.title = 'Combatir el crimen: paga 3 de Combate, una vez por turno, para inspirar Hope o Fear. Esta acción no puede desbordar el límite de 3 Hope o 3 Fear.';
+      el.appendChild(cost);
+    }
   }
 }
 
