@@ -316,6 +316,10 @@ html[data-game="marvel2"] { --accent: #f4c46f; }
 html[data-game="dc"] { --accent: #77bcf5; }
 html[data-game="predator"] { --accent: #dcdf7d; }
 html[data-game="firefly"] { --accent: #edb586; }
+html[data-game="buffy"] { --accent: #d1b4e9; }
+html[data-game="bigtrouble"] { --accent: #c6dd9b; }
+html[data-game="buffy"] #access-form h1, html[data-game="bigtrouble"] #access-form h1 { font-size:clamp(28px,6vw,42px); letter-spacing:.04em; }
+html[data-game="bigtrouble"] #game-name { font-size:clamp(12px,2.6vw,22px); letter-spacing:.04em; }
 html[data-game="marvel"] #game-name, html[data-game="marvel2"] #game-name, html[data-game="bond"] #game-name { font-size: clamp(12px, 2.6vw, 22px); letter-spacing: .04em; }
 #collection-rules { display: flex; flex-wrap: wrap; gap: 12px; margin: 12px 0; }
 #collection-avatar-fields label { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
@@ -351,3 +355,6 @@ html[data-game="marvel"] #game-name, html[data-game="marvel2"] #game-name, html[
 #xfiles-help { margin-bottom: 24px; }
 #xfiles-help a { color: var(--accent); }
 @media (max-width: 380px) { #xf-heroes { grid-template-columns: 1fr; } #turn-actions { gap: 8px; } }
+.counter[data-resource="courage"] { --counter-bg:#33564e; --counter-accent:#81c1a2; }
+.counter[data-resource="darkness"] { --counter-bg:#2c2142; --counter-accent:#b8a5cf; }
+.counter[data-resource="darkness"] .counter-controls span { min-width:40px; font-size:12px; white-space:nowrap; }

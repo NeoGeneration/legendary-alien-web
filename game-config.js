@@ -7,7 +7,7 @@ window.AlienGame = Object.hasOwn(LegendarySetup.titles,requestedGame)
   : { id: 'alien', title: 'ALIEN', data: 'data.json?v=7', saveKey: 'lea-web-state-v1', previousKey: 'lea-web-before-import-v1' };
 document.documentElement.dataset.game = window.AlienGame.id;
 document.title = `Legendary Encounters: ${window.AlienGame.title} — Mesa`;
-document.querySelector('#game-name').textContent = window.AlienGame.title;
+document.querySelector('#game-name').textContent = {buffy:'BUFFY',bigtrouble:'BIG TROUBLE'}[window.AlienGame.id]||window.AlienGame.title;
 document.querySelector('#access-form h1').textContent = window.AlienGame.title;
 document.querySelector('#btn-turn').hidden = false;
 if(window.AlienGame.id==='alien') {
@@ -25,10 +25,10 @@ if (window.AlienGame.id === 'xfiles') {
 }
 if (window.AlienGame.collection) {
   const game = window.AlienGame.id;
-  document.querySelector('[data-zone="complex"]').textContent = {matrix:'Matrix',bond:'Assignment',marvel:'Ciudad',marvel2:'Ciudad',dc:'Ciudad',predator:'Wilds',firefly:'Verse'}[game];
-  document.querySelector('[data-zone="hq"]').textContent = {matrix:'Dock',bond:'Q Branch',marvel:'HQ',marvel2:'HQ',dc:'HQ',predator:'HQ',firefly:'Bridge'}[game];
+  document.querySelector('[data-zone="complex"]').textContent = {matrix:'Matrix',bond:'Assignment',marvel:'Ciudad',marvel2:'Ciudad',dc:'Ciudad',predator:'Wilds',firefly:'Verse',buffy:'Sunnydale',bigtrouble:'Chinatown'}[game];
+  document.querySelector('[data-zone="hq"]').textContent = {matrix:'Dock',bond:'Q Branch',marvel:'HQ',marvel2:'HQ',dc:'HQ',predator:'HQ',firefly:'Bridge',buffy:'Library',bigtrouble:'HQ'}[game];
   document.querySelector('#setup-drones-label').hidden = true;
-  document.querySelector('#setup-players').value = '1';
+  document.querySelector('#setup-players').value = game==='bigtrouble'?'2':'1';
   document.querySelector('#collection-help').hidden = false;
   document.querySelector('#setup-description').textContent = game === 'matrix'
     ? 'Prepara la película, los tres actos, Zion, Dock y los personajes. Reparte seis cartas a cada jugador conectado.'
@@ -36,9 +36,11 @@ if (window.AlienGame.collection) {
     : game === 'marvel' ? 'Filtra por colecciones: Solo Core usa el juego base original. Elige tus héroes o déjalos al azar. Puedes elegir dificultad Epic y solitario clásico o avanzado.'
     : game === 'marvel2' ? 'Segunda Edición: 550 cartas, 9 Schemes y 5 Masterminds, con sus versiones Epic. Elige héroes, villanos y Henchmen o déjalos al azar. Tapete de esta edición y guardado independiente.'
     : game === 'dc' ? 'DC: 500 cartas, 14 héroes, 9 Schemes y 5 Masterminds con versiones Epic. Elige los grupos o déjalos al azar. Tapete propio, contador de Hope/Fear y transformaciones disponibles.'
+    : game === 'buffy' ? 'Buffy: 15 héroes, 8 Schemes y 5 Big Bads. Preparación para 1–5 jugadores, Coraje y marcador de Luz/Oscuridad. Cartas en español y reserva completa.'
+    : game === 'bigtrouble' ? 'Big Trouble: 9 héroes, 12 Schemes y 4 Masterminds. Preparación para 2–5 jugadores; héroes mediocres y excepciones de cada Scheme. Cartas en español y reserva completa.'
     : game === 'predator' ? 'Elige humanos o cazadores, película, personajes y variantes. Prepara los tres mazos por etapas, HQ, suministros y los mazos de jugador con su Role.'
     : 'Elige cinco personajes principales y tres episodios. Prepara los cuatro personajes de apoyo, Bridge, suministros y los mazos de jugador con un Talent.';
   document.querySelector('#turn-note').textContent = 'Los efectos, costes y avances de enemigos se resuelven manualmente. Terminar turno descarta la mano y las cartas jugadas, roba seis y reinicia Combate y Estrellas.';
   for (const button of document.querySelectorAll('[data-xf-command="gain"], [data-xf-command="conspiracy"]')) button.hidden = true;
-  document.querySelector('#marvel-mastermind-label').hidden = !['marvel','marvel2','dc'].includes(game);
+  document.querySelector('#marvel-mastermind-label').hidden = !['marvel','marvel2','dc','buffy','bigtrouble'].includes(game);
 }

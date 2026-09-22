@@ -58,7 +58,7 @@ window.AlienRooms = class {
   }
   forget(code) {
     localStorage.removeItem(this.storageKey(code));localStorage.removeItem(`lea-resume-code-v1:${code}`);
-    for(const id of ['alien','xfiles','matrix','bond','marvel','marvel2','dc','predator','firefly'])
+    for(const id of ['alien','xfiles','matrix','bond','marvel','marvel2','dc','predator','firefly','buffy','bigtrouble'])
       if(localStorage.getItem(`lea-last-room-v1:${id}`)===code)localStorage.removeItem(`lea-last-room-v1:${id}`);
   }
   async manage(entry,command) {

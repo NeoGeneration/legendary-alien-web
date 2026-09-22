@@ -8,7 +8,8 @@ const TILE = 1;                     // lado de Custom_Tile a scale=1
 const GAME = window.AlienGame || { id: 'alien', title: 'ALIEN', data: 'data.json?v=7', saveKey: 'lea-web-state-v1', previousKey: 'lea-web-before-import-v1' };
 const IS_XFILES = GAME.id === 'xfiles';
 const IS_COLLECTION = Boolean(GAME.collection);
-const IS_MODERN = ['marvel2','dc'].includes(GAME.id);
+const IS_CLASSIC = ['buffy','bigtrouble'].includes(GAME.id);
+const IS_CONFIGURABLE = IS_CLASSIC || ['marvel2','dc'].includes(GAME.id);
 const IS_MARVEL = ['marvel','marvel2'].includes(GAME.id);
 const IS_COMPACT = IS_XFILES || IS_COLLECTION;
 const GameSetup = IS_COLLECTION ? LegendarySetup.forGame(GAME.id) : IS_XFILES ? XFilesSetup : AlienSetup;
@@ -25,7 +26,7 @@ const PLAYER_ZONE_ART = {
 // remain compatible with their existing cards and turn actions.
 const PERSONAL_PLAYER_ZONE = {
   alien:'avatar',xfiles:'avatar',matrix:'avatar',predator:'avatar',firefly:'avatar',
-  bond:'victory',marvel:'victory',marvel2:'victory',dc:'victory',
+  bond:'victory',marvel:'victory',marvel2:'victory',dc:'victory',buffy:'victory',bigtrouble:'victory',
 };
 
 const $ = s => document.querySelector(s);
@@ -500,7 +501,7 @@ async function load() {
   });
   GameSetup.configure?.(data);
   if(GAME.id==='marvel')populateMarvelSetup();
-  if(IS_MODERN)populateModernSetup();
+  if(IS_CONFIGURABLE)populateModernSetup();
   if(GameSetup.encounters)populateEncountersSetup();
   if (IS_COLLECTION) {
     const links = $('#collection-rules'); links.innerHTML = '';
@@ -749,10 +750,11 @@ function renderObj(o) {
     el.setAttribute('role', 'group');
     el.setAttribute('aria-label', o.name || 'Contador');
     const label = document.createElement('small'); label.className = 'counter-label';
-    label.append(counterIcon(o.resource), document.createTextNode(o.name || 'Contador'));
+    if(!['darkness','courage'].includes(o.resource))label.appendChild(counterIcon(o.resource));
+    label.appendChild(document.createTextNode(o.name || 'Contador'));
     const row = document.createElement('div'); row.className = 'counter-controls';
     const minus = document.createElement('button'); minus.textContent = '−';
-    const val = document.createElement('span'); val.textContent = o.value;
+    const val = document.createElement('span'); val.textContent = o.resource==='darkness'?(Math.abs(o.value)+(o.value>0?' Luz':' Dark')):o.value;
     const plus = document.createElement('button'); plus.textContent = '+';
     minus.setAttribute('aria-label', `Restar ${o.name || 'punto'}`);
     plus.setAttribute('aria-label', `Sumar ${o.name || 'punto'}`);
@@ -820,8 +822,8 @@ function focusZone(zone) {
   activeZone = zone;
   document.querySelectorAll('[data-zone]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.zone === zone)));
   const mat = state.objects.find(o => o.type === 'playmat');
-  if (zone === 'playmat' && mat && GAME.id === 'dc') {
-    fitObjects([mat, ...state.objects.filter(o => o.type === 'counter' && o.resource === 'hope')]);
+  if (zone === 'playmat' && mat && ['dc','buffy'].includes(GAME.id)) {
+    fitObjects([mat, ...state.objects.filter(o => o.type === 'counter' && ['hope','darkness'].includes(o.resource))]);
     return;
   }
   if (IS_COLLECTION && !['playmat','all'].includes(zone)) {
@@ -1340,6 +1342,7 @@ function closeCardZoom() {
 }
 
 function changeCounter(o, amount) {
+  if(GAME.id==='buffy'&&o.resource==='darkness')return xfilesAction({command:'darkness',delta:amount});
   if (online?.active) return onlineAction({ type: 'counter', id: o.id, amount });
   pushUndo(); o.value += amount; renderObj(o); save();
 }
@@ -2068,8 +2071,8 @@ for (const link of document.querySelectorAll('#games-dialog a[data-game]')) link
 function updateEnemiesSummary() {
   $('#btn-enemies').hidden=false;
   const setup=state?.setup;
-  const meta=GameSetup.modern||GameSetup.marvel;
-  const hasMastermind=IS_MARVEL||GAME.id==='dc';
+  const meta=GameSetup.classic||GameSetup.modern||GameSetup.marvel;
+  const hasMastermind=IS_CLASSIC||IS_MARVEL||GAME.id==='dc';
   const master=meta?.masterminds.find(m=>m.key===setup?.mastermind);
   for(const kind of ['mastermind','henchmen']) {
     $('#enemies-'+kind).hidden=!hasMastermind;
@@ -2106,6 +2109,7 @@ function updateEnemiesSummary() {
   add('Episodios',names(setup.episodes,GameSetup.encounters?.episodes));
   if(GAME.id==='alien')add('Drones',setup.expansionDrones?'Base y expansión':'Base');
   add('Cartas por etapa',setup.hiveLayers||setup.conspiracyLayers||setup.matrixLayers||setup.bondLayers);
+  add('Jefes preparados',names(setup.masterminds,meta?.masterminds));
   add('Villanos adicionales',setup.extraVillains);
   add('Scheme Twists',setup.twists);add('Master Strikes',setup.masterStrikes);add('Bystanders',setup.bystanders);
   add('Notas de la preparación',setup.notes);
@@ -2262,7 +2266,7 @@ function populateMarvelSetup() {
   filterMarvelSetup();
 }
 function populateModernSetup() {
-  const meta=GameSetup.modern,schemes=$('#setup-scenario'),masters=$('#marvel-mastermind');
+  const meta=GameSetup.classic||GameSetup.modern,schemes=$('#setup-scenario'),masters=$('#marvel-mastermind');
   schemes.innerHTML='';masters.innerHTML='';
   for(const s of meta.schemes) {
     const option=document.createElement('option');option.value=s.id;option.textContent=s.title;schemes.appendChild(option);
@@ -2287,8 +2291,74 @@ function populateModernSetup() {
       $(`#modern-${kind}-list`).appendChild(label);modernGroupInputs[kind].push(input);
     }
   }
+  if(IS_CLASSIC) { populateClassicOptions(); return; }
   const reveal=document.createElement('button');reveal.textContent='Revelar Mastermind';reveal.dataset.xfCommand='revealMastermind';
   reveal.onclick=()=>xfilesAction({command:'revealMastermind'});$('#turn-actions').appendChild(reveal);
+}
+const classicFields=new Map();
+function populateClassicOptions() {
+  const meta=GameSetup.classic,container=$('#classic-options');
+  container.hidden=false;container.replaceChildren();classicFields.clear();
+  $('#marvel-epic').checked=false;$('#marvel-epic').disabled=true;$('#marvel-epic').parentElement.hidden=true;
+  const field=(key,title,choices)=>{
+    const label=document.createElement('label'),select=document.createElement('select');
+    label.appendChild(document.createTextNode(title));
+    for(const choice of [{value:'random',name:'Al azar'},...choices]) {
+      const option=document.createElement('option');option.value=choice.value;option.textContent=choice.name;select.appendChild(option);
+    }
+    select.value='random';select.onchange=updateSetupSummary;label.appendChild(select);container.appendChild(label);
+    classicFields.set(key,{label,select});
+  };
+  if(GAME.id==='buffy')field('extraHero','Héroe que entra en el mazo de villanos',meta.heroes.map(h=>({value:h.key,name:h.name})));
+  for(const [key,choices] of Object.entries(meta.commonChoices||{}))field(key,meta.heroes.find(h=>h.key===key).name+' · Excluir 5 copias de',choices.map(c=>({value:c.face,name:c.name})));
+}
+function classicOptions() {
+  return {extraHero:classicFields.get('extraHero')?.select.value,
+    excludedCommons:Object.fromEntries([...classicFields].filter(([key])=>key!=='extraHero').map(([key,{select}])=>[key,select.value]))};
+}
+function restoreClassicOptions(setup) {
+  for(const [key,{select}] of classicFields)select.value=(key==='extraHero'?setup.extraHero:setup.excludedCommons?.[key])||'random';
+}
+function updateClassicSummary(scenario,players) {
+  const meta=GameSetup.classic,c=ClassicLegendarySetup.counts(scenario,players);
+  const fixed=Boolean(scenario.masterminds),masters=$('#marvel-mastermind');masters.disabled=fixed;
+  const manualGroups=Object.keys(modernGroupInputs).some(k=>$(`#modern-${k}-mode`).value==='manual');
+  const randomOption=[...masters.options].find(o=>o.value==='random');
+  if(randomOption)randomOption.disabled=manualGroups&&!fixed;
+  if(randomOption?.disabled&&masters.value==='random')masters.value=meta.defaultMastermind;
+  const master=meta.masterminds.find(m=>m.key===masters.value);
+  const groups=ClassicLegendarySetup.requiredGroups(scenario,players,master);
+  const manualHeroes=$('#marvel-hero-mode').value==='manual',selected=selectedMarvelHeroes();
+  $('#marvel-hero-picker').hidden=!manualHeroes;
+  $('#marvel-hero-count').textContent=`${selected.length} de ${c.heroes} héroes seleccionados`;
+  let valid=players>=(scenario.minPlayers||meta.minPlayers)&&(!manualHeroes||selected.length===c.heroes);
+  const extra=classicFields.get('extraHero');
+  if(extra) {
+    extra.label.hidden=scenario.special!=='hero-villains';
+    for(const option of extra.select.options)option.disabled=option.value!=='random'&&
+      ((scenario.extraHeroChoices&&!scenario.extraHeroChoices.includes(option.value))||(manualHeroes&&selected.includes(option.value)));
+    if([...extra.select.options].find(o=>o.value===extra.select.value)?.disabled)extra.select.value='random';
+    if(scenario.special==='hero-villains')valid&&=[...extra.select.options].some(o=>o.value!=='random'&&!o.disabled);
+  }
+  for(const [key,{label}] of classicFields)if(key!=='extraHero')label.hidden=manualHeroes&&!selected.includes(key);
+  for(const kind of ['villain','henchmen']) {
+    const manual=$(`#modern-${kind}-mode`).value==='manual',required=groups[kind==='villain'?'villains':'henchmen'];
+    const expected=Math.max(c[kind==='villain'?'villains':'henchmen'],required.length);
+    $(`#modern-${kind}-picker`).hidden=!manual;
+    for(const input of modernGroupInputs[kind]) {input.disabled=required.includes(input.value);if(input.disabled)input.checked=true;}
+    const n=modernGroupInputs[kind].filter(i=>i.checked).length;
+    $(`#modern-${kind}-count`).textContent=`${n} de ${expected} grupos seleccionados · Los obligatorios están marcados`;
+    valid&&=!manual||n===expected;
+  }
+  const names=[...groups.villains,...groups.henchmen].map(k=>GameSetup.catalog().find(d=>d.key===k)?.name||k);
+  $('#modern-required-groups').textContent=(fixed?'Se preparan David Lo Pan y Sorcerous Lo Pan; el activo se elige al azar. ':'')+
+    (names.length?'Obligatorios: '+names.join(', ')+'. ':'')+(players===1?'Solitario oficial: se ignora Always Leads.':'Se respeta Always Leads.');
+  $('#setup-submit').disabled=!valid;
+  $('#setup-summary').textContent=`${meta.title} · ${c.heroes} héroes · ${Math.max(c.villains,groups.villains.length)} grupos de villanos · ${c.henchmenCards} Henchmen · ${c.bystanders} Bystanders · ${c.twists} Twists · ${c.strikes} Master Strikes. `+
+    (scenario.special==='hero-villains'?'Otro héroe completo entra en el mazo de villanos. ':'')+
+    (scenario.heroVillains?'14 cartas al azar del mazo de héroes entran en el mazo de villanos. ':'')+
+    (GAME.id==='bigtrouble'?'Cada jugador recibe héroes mediocres según el Scheme. Jack Burton y Wang Chi aportan 14 cartas; se aparta una de sus tres comunes. ':'Cada jugador empieza con 1 Coraje; el marcador empieza en 1 Dark. ')+
+    'Las cartas restantes quedan en la reserva. Los efectos durante la partida se resuelven manualmente.';
 }
 let encountersAvatars=[],encountersStages=[],encountersHeroes=[];
 function populateEncountersSetup() {
@@ -2390,7 +2460,7 @@ function updateSetupSummary() {
     for(const option of $('#setup-scenario').options)option.disabled=players<(GameSetup.scenarios.find(s=>s.id===option.value)?.minPlayers||1);
     if(players<(scenario.minPlayers||1)) {
       scenario=GameSetup.scenarios.find(s=>players>=(s.minPlayers||1)&&[...$('#setup-scenario').options].some(o=>o.value===s.id));
-      if(!scenario)return;
+      if(!scenario){$('#setup-submit').disabled=true;return;}
       $('#setup-scenario').value=scenario.id;
     }
     $('#marvel-leads-option').hidden=!IS_MARVEL||players!==1;
@@ -2398,7 +2468,8 @@ function updateSetupSummary() {
     const soloLeads=IS_MARVEL&&players===1&&$('#marvel-solo-leads').checked&&scenario.special!=='bodyguards';
     document.querySelectorAll('[data-collection-seat]').forEach(label=>{label.hidden=Number(label.dataset.collectionSeat)>players;});
     if(GameSetup.encounters) {updateEncountersSummary(players);return;}
-    if(IS_MODERN) {
+    if(IS_CONFIGURABLE) {
+      if(IS_CLASSIC) {updateClassicSummary(scenario,players);return;}
       const hidden=scenario.special==='bodyguards';
       $('#marvel-mastermind').disabled=hidden;
       const heroes=ModernLegendarySetup.count(scenario.heroes,players,[3,5,5,5,6][players-1])+(scenario.extraHeroes||0);
@@ -2498,13 +2569,13 @@ $('#btn-setup').onclick = () => {
     if([...$('#setup-scenario').options].some(o=>o.value===state.setup.scenario))$('#setup-scenario').value=state.setup.scenario;
     $('#setup-players').value = state.setup.players;
     $('#setup-drones').checked = state.setup.expansionDrones;
-    if(GAME.id==='marvel'||IS_MODERN) {
+    if(GAME.id==='marvel'||IS_CONFIGURABLE) {
       $('#marvel-solo-leads').checked=Boolean(state.setup.soloAlwaysLeads);
       if([...$('#marvel-mastermind').options].some(o=>o.value===state.setup.mastermind))$('#marvel-mastermind').value=state.setup.mastermind;
       $('#marvel-epic').checked=!$('#marvel-epic').disabled&&Boolean(state.setup.epic);
       $('#marvel-solo').value=state.setup.soloMode||'classic';
       if(!$('#marvel-supplies').disabled)$('#marvel-supplies').value=state.setup.supplies||'base';
-      if(IS_MODERN) {
+      if(IS_CONFIGURABLE) {
         $('#marvel-hero-mode').value=state.setup.heroMode||'random';
         marvelHeroInputs.forEach(i=>i.checked=(state.setup.heroKeys||[]).includes(i.value));
         for(const kind of ['villain','henchmen']) {
@@ -2513,6 +2584,7 @@ $('#btn-setup').onclick = () => {
         }
       }
     }
+    if(IS_CLASSIC)restoreClassicOptions(state.setup);
     if(GameSetup.encounters)configureEncountersOptions(state.setup);
     if(IS_COLLECTION && GameSetup.avatars.length && state.setup.avatars)state.setup.avatars.forEach((avatar,i)=>{$('#collection-avatar-'+(i+1)).value=avatar;});
     if (IS_XFILES) {
@@ -2522,7 +2594,7 @@ $('#btn-setup').onclick = () => {
     }
   }
   // Every game can reserve places before friends join; local play controls seat 1.
-  const minimum=online?.active?Math.max(1,...online.room.players.map((p,i)=>p.seat||i+1)):1;
+  const minimum=Math.max(GameSetup.classic?.minPlayers||1,online?.active?Math.max(1,...online.room.players.map((p,i)=>p.seat||i+1)):1);
   for (const option of $('#setup-players').options) option.disabled=Number(option.value)<minimum;
   $('#setup-players').value=String(Math.max(Number($('#setup-players').value)||1,minimum));
   updateSetupSummary();
@@ -2551,11 +2623,12 @@ $('#setup-form').onsubmit = async e => {
     epic:Boolean($('#marvel-epic').checked),supplies:$('#marvel-supplies').value||'expanded',soloMode:$('#marvel-solo').value||'classic'});
   if(GAME.id==='marvel'&&marvelCollectionInputs.length)Object.assign(options,{collections:selectedMarvelCollections(),
     ...($('#marvel-hero-mode').value==='manual'?{heroKeys:selectedMarvelHeroes()}:{})});
-  if(IS_MODERN) {
+  if(IS_CONFIGURABLE) {
     Object.assign(options,{mastermind:$('#marvel-mastermind').value,epic:Boolean($('#marvel-epic').checked)});
     if($('#marvel-hero-mode').value==='manual')options.heroKeys=selectedMarvelHeroes();
     for(const kind of ['villain','henchmen'])if($(`#modern-${kind}-mode`).value==='manual')options[kind+'Keys']=modernGroupInputs[kind].filter(i=>i.checked).map(i=>i.value);
   }
+  if(IS_CLASSIC)Object.assign(options,classicOptions());
   if(IS_COLLECTION && GameSetup.avatars.length)options.avatars=Array.from({length:options.players},(_,i)=>$('#collection-avatar-'+(i+1)).value);
   if (IS_XFILES) Object.assign(options, {
     heroes: [...document.querySelectorAll('#xf-heroes input:checked')].map(input => Number(input.value)),

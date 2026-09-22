@@ -3,7 +3,7 @@
 // Shared table tools and automatic scenario preparation. Card effects are
 // resolved by the players. Bond recipes are reviewed in build_bond_setup.py.
 const LegendarySetup = (() => {
-  const titles = { matrix: 'THE MATRIX', bond: 'JAMES BOND', marvel: 'MARVEL LEGENDARY', marvel2: 'MARVEL · 2ª EDICIÓN', dc: 'LEGENDARY DC', predator: 'PREDATOR', firefly: 'FIREFLY' };
+  const titles = { buffy: 'LEGENDARY BUFFY', bigtrouble: 'BIG TROUBLE IN LITTLE CHINA', matrix: 'THE MATRIX', bond: 'JAMES BOND', marvel: 'MARVEL LEGENDARY', marvel2: 'MARVEL · 2ª EDICIÓN', dc: 'LEGENDARY DC', predator: 'PREDATOR', firefly: 'FIREFLY' };
   const engines = new Map();
   const copy = value => JSON.parse(JSON.stringify(value));
   function discardZone(game,seat=1) {
@@ -66,6 +66,7 @@ const LegendarySetup = (() => {
       if (source.gameId !== id) throw new Error('Colección incorrecta.'); data=source;
       if(id==='marvel'&&data.marvelSetups)for(const recipe of data.marvelSetups.schemes)
         if(!scenarios.some(s=>s.id===recipe.id))scenarios.push(recipe);
+      if(data.classicSetups)scenarios.splice(0,scenarios.length,...data.classicSetups.schemes);
       if(data.modernSetups)scenarios.splice(0,scenarios.length,...data.modernSetups.schemes);
       if(data.encountersSetups)scenarios.splice(0,scenarios.length,...data.encountersSetups.scenarios);
     };
@@ -121,6 +122,10 @@ const LegendarySetup = (() => {
       game.setup={scenario:scenario.id,title:scenario.title,players,turn:1};
       if(data.encountersSetups) {
         const preparer=typeof module!=='undefined'?require('./encounters/setup.js'):EncountersSetup;
+        return preparer.prepare({data,game,scenario,players,options,random,add,seatZone,shuffle});
+      }
+      if(data.classicSetups) {
+        const preparer=typeof module!=='undefined'?require('./classic/setup.js'):ClassicLegendarySetup;
         return preparer.prepare({data,game,scenario,players,options,random,add,seatZone,shuffle});
       }
       if(data.modernSetups) {
@@ -393,6 +398,10 @@ const LegendarySetup = (() => {
         const preparer=typeof module!=='undefined'?require('./modern/setup.js'):ModernLegendarySetup;
         return preparer.revealMastermind({data,game,random,add,shuffle});
       }
+      if(action.command==='darkness'&&id==='buffy') {
+        const preparer=typeof module!=='undefined'?require('./classic/setup.js'):ClassicLegendarySetup;
+        return preparer.advanceDarkness(game,action.delta,seat);
+      }
       if(action.command==='draw') {
         if(![1,6].includes(action.count))throw new Error('Puedes robar una o seis cartas.');
         return 'Robadas '+draw(game,hand,seat,action.count,random);
@@ -420,7 +429,7 @@ const LegendarySetup = (() => {
       throw new Error('Acción no válida.');
     }
     const engine={configure,scenarios,avatars,catalog,newGame,create,act,draw,bring,seatZone,inPlayArea,firstTurn,
-      get rules(){return data?.rules||[];},get marvel(){return data?.marvelSetups;},get modern(){return data?.modernSetups;},get encounters(){return data?.encountersSetups;}};
+      get rules(){return data?.rules||[];},get marvel(){return data?.marvelSetups;},get classic(){return data?.classicSetups;},get modern(){return data?.modernSetups;},get encounters(){return data?.encountersSetups;}};
     engines.set(id,engine);return engine;
   }
   return {titles,forGame,discardZone,discardHand};
